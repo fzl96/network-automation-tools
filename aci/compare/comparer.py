@@ -1,10 +1,35 @@
+import os
 import json
 import re
 import datetime
+from collections import defaultdict
 from rich import print as rprint
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill
-import os
+from openpyxl.styles import Alignment
+from openpyxl.cell.cell import MergedCell
+from openpyxl.utils import get_column_letter
+from typing import Optional, Tuple
+import csv
+
+
+def _autosize_columns(ws, padding=2, min_width=12, max_width=80):
+    widths = {}
+    for row in ws.iter_rows():
+        for cell in row:
+            # Skip non-anchor merged cells
+            if isinstance(cell, MergedCell):
+                continue
+
+            col_letter = get_column_letter(cell.column)
+            val = "" if cell.value is None else str(cell.value)
+
+            # If the cell has newlines, size to the longest line
+            longest = max((len(line) for line in val.splitlines()), default=0)
+
+            widths[col_letter] = max(widths.get(col_letter, 0), longest)
+
+    for col, w in widths.items():
+        ws.column_dimensions[col].width = max(min(w + padding, max_width), min_width)
 
 
 def summarize_interfaces(data):
@@ -44,6 +69,53 @@ def extract_interface_from_dn(dn):
     return None, None
 
 
+def write_interface_errors(intf_ws, category: str, changes: list):
+    align_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    for entry in changes:
+        node = entry["node"]
+        interface = entry["interface"]
+        intf_descr = entry["interface_descr"]
+        before = entry["before"]
+        after = entry["after"]
+        endpoints = entry.get("endpoints", [])
+
+        start_row = intf_ws.max_row + 1
+
+        if endpoints:
+            for ep in endpoints:
+                intf_ws.append(
+                    [
+                        category,
+                        node,
+                        interface,
+                        intf_descr,
+                        before,
+                        after,
+                        ep.get("mac", ""),
+                        ep.get("ip", ""),
+                        ep.get("vlan", ""),
+                        ep.get("epg_descr", ""),
+                    ]
+                )
+            end_row = intf_ws.max_row
+
+            for col in ("A", "B", "C", "D", "E", "F"):
+                intf_ws.merge_cells(f"{col}{start_row}:{col}{end_row}")
+                intf_ws[f"{col}{start_row}"].alignment = align_center
+
+        else:
+            intf_ws.append(
+                [category, node, interface, intf_descr, before, after, "", "", "", ""]
+            )
+            r = intf_ws.max_row
+            # Align the entire single row
+            for col in ("A", "B", "C", "D", "E", "F", "G", "H"):
+                intf_ws[f"{col}{r}"].alignment = align_center
+
+    _autosize_columns(intf_ws)
+
+
 def compare_snapshots(file1, file2):
     with open(file1) as f1, open(file2) as f2:
         before = json.load(f1)
@@ -66,23 +138,66 @@ def compare_snapshots(file1, file2):
     result["cleared_faults"] = sorted(before_faults - after_faults)
 
     # Endpoints
+
     before_eps = {
-        ep["fvCEp"]["attributes"]["dn"]: ep["fvCEp"]["attributes"].get("ip")
+        ep["mac"]: {
+            "node": ep["node"],
+            "interface": ep["interface"],
+            "mac": ep["mac"],
+            "vlan": ep["vlan"],
+            "epg_descr": ep["epg_descr"],
+            "dn": ep["dn"],
+            "ip": (ep.get("ip") or ""),
+        }
         for ep in before.get("endpoints", [])
     }
     after_eps = {
-        ep["fvCEp"]["attributes"]["dn"]: ep["fvCEp"]["attributes"].get("ip")
+        ep["mac"]: {
+            "node": ep["node"],
+            "interface": ep["interface"],
+            "mac": ep["mac"],
+            "vlan": ep["vlan"],
+            "epg_descr": ep["epg_descr"],
+            "dn": ep["dn"],
+            "ip": (ep.get("ip") or ""),
+        }
         for ep in after.get("endpoints", [])
     }
-    result["new_endpoints"] = sorted(set(after_eps) - set(before_eps))
-    result["missing_endpoints"] = sorted(set(before_eps) - set(after_eps))
-    result["moved_endpoints"] = sorted(
-        [
-            dn
-            for dn in set(before_eps) & set(after_eps)
-            if before_eps[dn] != after_eps[dn]
-        ]
-    )
+
+    before_dns = set(before_eps.keys())
+    after_dns = set(after_eps.keys())
+    new_endpoints = []
+    missing_endpoints = []
+    new_endpoints_mac = sorted(after_dns - before_dns)
+    missing_endpoints_mac = sorted(before_dns - after_dns)
+    for mac in new_endpoints_mac:
+        temp = after_eps.get(mac, {})
+        new_endpoints.append(temp)
+
+    for mac in missing_endpoints_mac:
+        temp = before_eps.get(mac)
+        missing_endpoints.append(temp)
+
+    result["new_endpoints"] = new_endpoints
+    result["missing_endpoints"] = missing_endpoints
+
+    # before_eps = {
+    #     ep["fvCEp"]["attributes"]["dn"]: ep["fvCEp"]["attributes"].get("ip")
+    #     for ep in before.get("endpoints", [])
+    # }
+    # after_eps = {
+    #     ep["fvCEp"]["attributes"]["dn"]: ep["fvCEp"]["attributes"].get("ip")
+    #     for ep in after.get("endpoints", [])
+    # }
+    # result["new_endpoints"] = sorted(set(after_eps) - set(before_eps))
+    # result["missing_endpoints"] = sorted(set(before_eps) - set(after_eps))
+    # result["moved_endpoints"] = sorted(
+    #     [
+    #         dn
+    #         for dn in set(before_eps) & set(after_eps)
+    #         if before_eps[dn] != after_eps[dn]
+    #     ]
+    # )
 
     # Interface status
     before_intfs = summarize_interfaces(before.get("interfaces", []))
@@ -99,17 +214,60 @@ def compare_snapshots(file1, file2):
     result["interface_changes"] = intf_changes
 
     # Interface Errors
-    before_errs = summarize_interface_errors(before.get("interface_errors", []))
-    after_errs = summarize_interface_errors(after.get("interface_errors", []))
-    error_changes = {}
-    for dn in set(before_errs) | set(after_errs):
-        b = before_errs.get(dn, 0)
-        a = after_errs.get(dn, 0)
-        if a > b:
-            error_changes[dn] = f"{b} ➜ {a}"
-    result["interface_error_changes"] = error_changes
 
-    # CRC Errors - Only show interfaces with increased errors
+    # NOTE: Interface Errors
+    ## Get interface details
+    interfaces_map = {}
+    po_map = {}
+    interfaces = after.get("interfaces", [])
+    pos = after.get("pc_aggr", [])
+
+    for item in interfaces:
+        attr = item.get("l1PhysIf", {}).get("attributes", {})
+
+        dn = attr.get("dn", "")
+
+        node = None
+        for part in dn.split("/"):
+            if part.startswith("node-"):
+                node = part
+                break
+
+        entry = {
+            "node": node,
+            "id": attr.get("id", ""),
+            "descr": attr.get("descr", ""),
+        }
+        interfaces_map[f"{node}-{attr.get('id', 'none')}"] = entry
+
+        for po in pos:
+            attr = po.get("pcAggrIf", {}).get("attributes", {})
+            dn = attr.get("dn", "")
+            node = None
+            for part in dn.split("/"):
+                if part.startswith("node-"):
+                    node = part
+                    break
+
+            po_entry = {
+                "node": node,
+                "id": attr.get("id", ""),
+                "name": attr.get("name", ""),
+            }
+
+            po_map[f"{node}-{attr.get('id', 'None')}"] = po_entry
+
+        before_errs = summarize_interface_errors(before.get("interface_errors", []))
+        after_errs = summarize_interface_errors(after.get("interface_errors", []))
+        error_changes = {}
+        for dn in set(before_errs) | set(after_errs):
+            b = before_errs.get(dn, 0)
+            a = after_errs.get(dn, 0)
+            if a > b:
+                error_changes[dn] = f"{b} ➜ {a}"
+        result["interface_error_changes"] = error_changes
+
+    # NOTE: CRC Errors
     before_crc = {}
     for e in before.get("crc_errors", []):
         if "rmonEtherStats" in e and "attributes" in e["rmonEtherStats"]:
@@ -132,71 +290,140 @@ def compare_snapshots(file1, file2):
             if dn:
                 after_crc[dn] = crc_align_errors
 
-    crc_changes = {}
-
     all_interfaces = set(before_crc.keys()) | set(after_crc.keys())
-
+    crc_changes = []
     for dn in all_interfaces:
         b = before_crc.get(dn, 0)
         a = after_crc.get(dn, 0)
 
         if a > b:
             # Extract interface name for better readability
-            interface_name = extract_interface_from_dn(dn)
-            crc_changes[interface_name] = f"{b} ➜ {a}"
+            node, port = extract_interface_from_dn(dn)
+            if node is None:
+                continue
+
+            err_eps = [
+                ep
+                for ep in after_eps.values()
+                if ep["node"] == node.split("-")[1] and ep["interface"] == port
+            ]
+
+            crc_changes.append(
+                {
+                    "before": b,
+                    "after": a,
+                    "node": node,
+                    "interface": port
+                    if not port.startswith("po")  # type: ignore
+                    else po_map.get(f"{node}-{port}", {}).get("name", port),
+                    "interface_descr": interfaces_map.get(f"{node}-{port}", {}).get(
+                        "descr", ""
+                    ),
+                    "endpoints": err_eps,
+                }
+            )
 
     result["crc_error_changes"] = crc_changes
 
-    # Interface Drop Errors - Only show interfaces with increased errors
+    # NOTE: Interface Errors
     before_drop = {}
     for e in before.get("drop_errors", []):
         if "rmonEgrCounters" in e and "attributes" in e["rmonEgrCounters"]:
             dn = e["rmonEgrCounters"]["attributes"].get("dn")
-            drop_errors = int(e["rmonEgrCounters"]["attributes"].get("dropPkts", 0))
+            drop_errors = int(
+                e["rmonEgrCounters"]["attributes"].get("bufferdroppkts", 0)
+            )
             if dn:
                 before_drop[dn] = drop_errors
     after_drop = {}
     for e in after.get("drop_errors", []):
         if "rmonEgrCounters" in e and "attributes" in e["rmonEgrCounters"]:
             dn = e["rmonEgrCounters"]["attributes"].get("dn")
-            drop_errors = int(e["rmonEgrCounters"]["attributes"].get("dropPkts", 0))
+            drop_errors = int(
+                e["rmonEgrCounters"]["attributes"].get("bufferdroppkts", 0)
+            )
             if dn:
                 after_drop[dn] = drop_errors
-    drop_changes = {}
+
     all_interfaces = set(before_drop.keys()) | set(after_drop.keys())
+    drop_changes = []
     for dn in all_interfaces:
         b = before_drop.get(dn, 0)
         a = after_drop.get(dn, 0)
         if a > b:
-            interface_name = extract_interface_from_dn(dn)
-            drop_changes[interface_name] = f"{b} ➜ {a}"
+            node, intf = extract_interface_from_dn(dn)
+            if node is None:
+                continue
+            err_eps = [
+                ep
+                for ep in after_eps.values()
+                if ep["node"] == node.split("-")[1] and ep["interface"] == intf
+            ]
+
+            drop_changes.append(
+                {
+                    "before": b,
+                    "after": a,
+                    "node": node,
+                    "interface": intf
+                    if not intf.startswith("po")  # type: ignore
+                    else po_map.get(f"{node}-{intf}", {}).get("name", intf),
+                    "interface_descr": interfaces_map.get(f"{node}-{intf}", {}).get(
+                        "descr", ""
+                    ),
+                    "endpoints": err_eps,
+                }
+            )
+
     result["drop_error_changes"] = drop_changes
 
-    # Output Errors - Only show interfaces with increased errors
+    # NOTE: Output Errrors
     before_output = {}
     for e in before.get("output_errors", []):
         if "rmonIfOut" in e and "attributes" in e["rmonIfOut"]:
             dn = e["rmonIfOut"]["attributes"].get("dn")
-            output_errors = int(e["rmonIfOut"]["attributes"].get("outErrors", 0))
+            output_errors = int(e["rmonIfOut"]["attributes"].get("errors", 0))
             if dn:
                 before_output[dn] = output_errors
     after_output = {}
     for e in after.get("output_errors", []):
         if "rmonIfOut" in e and "attributes" in e["rmonIfOut"]:
             dn = e["rmonIfOut"]["attributes"].get("dn")
-            output_errors = int(e["rmonIfOut"]["attributes"].get("outErrors", 0))
+            output_errors = int(e["rmonIfOut"]["attributes"].get("errors", 0))
             if dn:
                 after_output[dn] = output_errors
-    output_changes = {}
+
+    output_changes = []
     all_interfaces = set(before_output.keys()) | set(after_output.keys())
     for dn in all_interfaces:
         b = before_output.get(dn, 0)
         a = after_output.get(dn, 0)
         if a > b:
-            interface_name = extract_interface_from_dn(dn)
-            output_changes[interface_name] = f"{b} ➜ {a}"
+            node, intf = extract_interface_from_dn(dn)
+            err_eps = [
+                ep
+                for ep in after_eps.values()
+                if ep["node"] == node and ep["interface"] == intf
+            ]
+
+            output_changes.append(
+                {
+                    "before": b,
+                    "after": a,
+                    "node": node,
+                    "interface": intf
+                    if not intf.startswith("po")
+                    else po_map.get(f"{node}-{intf}", {}).get("name", intf),
+                    "interface_descr": interfaces_map.get(f"{node}-{intf}", {}).get(
+                        "descr", ""
+                    ),
+                    "endpoints": err_eps,
+                }
+            )
+
     result["output_error_changes"] = output_changes
-    # URIB routes
+
+    # NOTE: URIB Route
     before_routes = {
         r["uribv4Route"]["attributes"]["dn"] for r in before.get("urib_routes", [])
     }
@@ -209,6 +436,116 @@ def compare_snapshots(file1, file2):
     }
     result["urib_route_changes"] = route_changes
 
+    # before_errs = summarize_interface_errors(before.get("interface_errors", []))
+    # after_errs = summarize_interface_errors(after.get("interface_errors", []))
+    # error_changes = {}
+    # for dn in set(before_errs) | set(after_errs):
+    #     b = before_errs.get(dn, 0)
+    #     a = after_errs.get(dn, 0)
+    #     if a > b:
+    #         error_changes[dn] = f"{b} ➜ {a}"
+    # result["interface_error_changes"] = error_changes
+
+    # # CRC Errors - Only show interfaces with increased errors
+    # before_crc = {}
+    # for e in before.get("crc_errors", []):
+    #     if "rmonEtherStats" in e and "attributes" in e["rmonEtherStats"]:
+    #         dn = e["rmonEtherStats"]["attributes"].get("dn")
+    #         # Note: The key is "cRCAlignErrors" not "crcAlignErrors"
+    #         crc_align_errors = int(
+    #             e["rmonEtherStats"]["attributes"].get("cRCAlignErrors", 0)
+    #         )
+    #         if dn:
+    #             before_crc[dn] = crc_align_errors
+    #
+    # after_crc = {}
+    # for e in after.get("crc_errors", []):
+    #     if "rmonEtherStats" in e and "attributes" in e["rmonEtherStats"]:
+    #         dn = e["rmonEtherStats"]["attributes"].get("dn")
+    #         # Note: The key is "cRCAlignErrors" not "crcAlignErrors"
+    #         crc_align_errors = int(
+    #             e["rmonEtherStats"]["attributes"].get("cRCAlignErrors", 0)
+    #         )
+    #         if dn:
+    #             after_crc[dn] = crc_align_errors
+    #
+    # crc_changes = {}
+    #
+    # all_interfaces = set(before_crc.keys()) | set(after_crc.keys())
+    #
+    # for dn in all_interfaces:
+    #     b = before_crc.get(dn, 0)
+    #     a = after_crc.get(dn, 0)
+    #
+    #     if a > b:
+    #         # Extract interface name for better readability
+    #         interface_name = extract_interface_from_dn(dn)
+    #         crc_changes[interface_name] = f"{b} ➜ {a}"
+    #
+    # result["crc_error_changes"] = crc_changes
+    #
+    # # Interface Drop Errors - Only show interfaces with increased errors
+    # before_drop = {}
+    # for e in before.get("drop_errors", []):
+    #     if "rmonEgrCounters" in e and "attributes" in e["rmonEgrCounters"]:
+    #         dn = e["rmonEgrCounters"]["attributes"].get("dn")
+    #         drop_errors = int(e["rmonEgrCounters"]["attributes"].get("dropPkts", 0))
+    #         if dn:
+    #             before_drop[dn] = drop_errors
+    # after_drop = {}
+    # for e in after.get("drop_errors", []):
+    #     if "rmonEgrCounters" in e and "attributes" in e["rmonEgrCounters"]:
+    #         dn = e["rmonEgrCounters"]["attributes"].get("dn")
+    #         drop_errors = int(e["rmonEgrCounters"]["attributes"].get("dropPkts", 0))
+    #         if dn:
+    #             after_drop[dn] = drop_errors
+    # drop_changes = {}
+    # all_interfaces = set(before_drop.keys()) | set(after_drop.keys())
+    # for dn in all_interfaces:
+    #     b = before_drop.get(dn, 0)
+    #     a = after_drop.get(dn, 0)
+    #     if a > b:
+    #         interface_name = extract_interface_from_dn(dn)
+    #         drop_changes[interface_name] = f"{b} ➜ {a}"
+    # result["drop_error_changes"] = drop_changes
+    #
+    # # Output Errors - Only show interfaces with increased errors
+    # before_output = {}
+    # for e in before.get("output_errors", []):
+    #     if "rmonIfOut" in e and "attributes" in e["rmonIfOut"]:
+    #         dn = e["rmonIfOut"]["attributes"].get("dn")
+    #         output_errors = int(e["rmonIfOut"]["attributes"].get("outErrors", 0))
+    #         if dn:
+    #             before_output[dn] = output_errors
+    # after_output = {}
+    # for e in after.get("output_errors", []):
+    #     if "rmonIfOut" in e and "attributes" in e["rmonIfOut"]:
+    #         dn = e["rmonIfOut"]["attributes"].get("dn")
+    #         output_errors = int(e["rmonIfOut"]["attributes"].get("outErrors", 0))
+    #         if dn:
+    #             after_output[dn] = output_errors
+    # output_changes = {}
+    # all_interfaces = set(before_output.keys()) | set(after_output.keys())
+    # for dn in all_interfaces:
+    #     b = before_output.get(dn, 0)
+    #     a = after_output.get(dn, 0)
+    #     if a > b:
+    #         interface_name = extract_interface_from_dn(dn)
+    #         output_changes[interface_name] = f"{b} ➜ {a}"
+    # result["output_error_changes"] = output_changes
+    # # URIB routes
+    # before_routes = {
+    #     r["uribv4Route"]["attributes"]["dn"] for r in before.get("urib_routes", [])
+    # }
+    # after_routes = {
+    #     r["uribv4Route"]["attributes"]["dn"] for r in after.get("urib_routes", [])
+    # }
+    # route_changes = {
+    #     "missing": sorted(before_routes - after_routes),
+    #     "new": sorted(after_routes - before_routes),
+    # }
+    # result["urib_route_changes"] = route_changes
+    #
     return result
 
 
@@ -265,6 +602,138 @@ def print_colored_result(result):
             print_section(section, result[section])
         else:
             rprint(f"🔹 [yellow]{section}[/yellow]: (not available)\n")
+
+
+def save_to_excel(
+    result: dict, filename: str | None = None, base_dir: str | None = None
+):
+    # Create directory structure
+    if base_dir:
+        compare_dir = os.path.join(base_dir, "compare")
+    else:
+        compare_dir = os.path.join("aci", "results", "compare")
+    os.makedirs(compare_dir, exist_ok=True)
+
+    if filename is None:
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"comparison_result_{timestamp}.xlsx"
+
+    filepath = os.path.join(compare_dir, filename)
+
+    wb = Workbook()
+    # remove default sheet
+    ws = wb.active
+    wb.remove(wb.active)  # type: ignore
+    ws = wb.create_sheet("General")
+
+    ws.append(["Category", "Item", "Details"])
+
+    fh = result.get("fabric_health", {})
+    ws.append(["Fabric Health", "Before", fh.get("before", "N/A")])
+    ws.append(["Fabric Health", "After", fh.get("after", "N/A")])
+
+    # Faults
+    for fault in result.get("new_faults", []):
+        ws.append(["New Faults", fault, ""])
+    for fault in result.get("cleared_faults", []):
+        ws.append(["Cleared Faults", fault, ""])
+
+    # Interface Changes
+    intf_changes = result.get("interface_changes", {}) or {}
+    for change in intf_changes.get("status_changed", []):
+        ws.append(["Interface Status Changed", change, ""])
+    for intf in intf_changes.get("missing", []):
+        ws.append(["Interface Missing", intf, ""])
+    for intf in intf_changes.get("new", []):
+        ws.append(["Interface New", intf, ""])
+
+    # Interface Error Changes (dict or list supported)
+    iec = result.get("interface_error_changes", {}) or {}
+    if isinstance(iec, dict):
+        for k, v in iec.items():
+            ws.append(["Interface Error Changes", str(k), v])
+    elif isinstance(iec, list):
+        for row in iec:
+            dn = row.get("dn") or f"{row.get('node', '')}/{row.get('interface', '')}"
+            before = row.get("before", "")
+            after = row.get("after", "")
+            ws.append(["Interface Error Changes", dn, f"{before} -> {after}"])
+
+    # URIB Route Changes
+    urib = result.get("urib_route_changes", {}) or {}
+    for route in urib.get("missing", []):
+        ws.append(["URIB Routes Missing", route, ""])
+    for route in urib.get("new", []):
+        ws.append(["URIB Routes New", route, ""])
+
+    _autosize_columns(ws)
+
+    # NOTE: Interface Error Sheet
+    int_sheet_name = "Interface Errors"
+    intf_ws = wb.create_sheet(int_sheet_name[:31])
+
+    headers = [
+        "Category",
+        "Node",
+        "Interface",
+        "Description",
+        "Before",
+        "After",
+        "Mac",
+        "IP",
+        "VLAN",
+        "Description",
+    ]
+    intf_ws.append(headers)
+
+    cec = result.get("crc_error_changes", [])
+    dec = result.get("drop_error_changes", [])
+    oec = result.get("output_error_changes", [])
+
+    write_interface_errors(intf_ws, "CRC Changes", cec)
+    write_interface_errors(intf_ws, "Drop Changes", dec)
+    write_interface_errors(intf_ws, "Output Error Changes", oec)
+
+    # NOTE: Endpoints Sheet
+    eps_sheet_name = "Endpoints"
+    eps_ws = wb.create_sheet(eps_sheet_name[:31])
+
+    eps_ws.append(
+        [
+            "Category",
+            "Endpoint",
+            "Mac",
+            "Ip address",
+            "Switch",
+            "interface",
+            "vlan",
+            "Description",
+        ]
+    )
+
+    for cat, key in (
+        ("New Endpoints", "new_endpoints"),
+        ("Missing Endpoints", "missing_endpoints"),
+    ):
+        for ep in result.get(key, []) or []:
+            if not isinstance(ep, dict):
+                continue
+            eps_ws.append(
+                [
+                    cat,
+                    ep.get("dn", ""),
+                    ep.get("mac", ""),
+                    ep.get("ip", ""),
+                    ep.get("node", ""),
+                    ep.get("interface", ""),
+                    ep.get("vlan", ""),
+                    ep.get("epg_descr", ""),
+                ]
+            )
+
+        _autosize_columns(eps_ws)
+
+    wb.save(filepath)
 
 
 def save_to_xlsx(result, filename=None, base_dir=None):

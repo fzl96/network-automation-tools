@@ -4,6 +4,7 @@ aci_main.py
 Professional and consistent CLI for Cisco ACI Snapshot Tools
 """
 
+import json
 import getpass
 import glob
 import requests
@@ -12,7 +13,12 @@ from typing import Tuple, Optional
 from requests.cookies import RequestsCookieJar
 from aci.api.aci_client import login
 from aci.snapshot.snapshotter import take_snapshot, list_snapshots, choose_snapshots
-from aci.compare.comparer import compare_snapshots, print_colored_result, save_to_xlsx
+from aci.compare.comparer import (
+    compare_snapshots,
+    print_colored_result,
+    save_to_xlsx,
+    save_to_excel,
+)
 from aci.healthcheck.checklist_aci import main_healthcheck_aci
 import sys
 import os
@@ -149,7 +155,9 @@ def show_menu():
 
 
 def main():
-    base_dir = None
+    base_dir = "/home/furina/Output/Results"
+    customer_name = None
+
     while True:
         print_header()
         show_menu()
@@ -188,7 +196,7 @@ def main():
                 print(f"📊 Comparing:\n  BEFORE: {before}\n  AFTER:  {after}")
                 result = compare_snapshots(before, after)
                 print_colored_result(result)
-                save_to_xlsx(result, base_dir=base_dir)
+                save_to_excel(result, base_dir=base_dir)
                 print("✅ Comparison results saved to Excel.")
             pause()
 
@@ -199,7 +207,7 @@ def main():
                 print(f"📊 Comparing '{file1}' and '{file2}'...")
                 result = compare_snapshots(file1, file2)
                 print_colored_result(result)
-                save_to_xlsx(result, base_dir=base_dir)
+                save_to_excel(result, base_dir=base_dir)
                 print("✅ Comparison results saved to Excel.")
             else:
                 print("❌ No valid snapshots selected.")
