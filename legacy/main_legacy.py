@@ -9,13 +9,16 @@ import os
 import time
 import getpass
 from legacy.creds.credential_manager import save_credentials, load_credentials
-from legacy.inventory.inventory import create_inventory, show_inventory
+from legacy.inventory.inventory import create_inventory, show_inventory, load_devices
 from legacy.backup_config.backup import run_backup
+from legacy.lib.snapshot import take_snapshot
+from legacy.lib.compare import compare
 
 
 # ============================================================
 # Utility Functions
 # ============================================================
+
 
 def clear_screen():
     """Clear terminal screen for clean display"""
@@ -53,6 +56,8 @@ def show_menu():
     print("2. Create or update device inventory")
     print("3. Backup device configurations")
     print("4. Show inventory list")
+    print("5. Take Snapshot + Health Check")
+    print("6. Compare Snapshot")
     print("q. Exit")
     print("-" * 60)
 
@@ -61,7 +66,9 @@ def show_menu():
 # Main Logic
 # ============================================================
 
+
 def main():
+    base_dir = None
     while True:
         print_header()
         show_menu()
@@ -79,7 +86,9 @@ def main():
         elif choice == "2":
             username, password = load_credentials()
             if not username or not password:
-                print("\n⚠️  No saved credentials found. Please save credentials first (option 1).")
+                print(
+                    "\n⚠️  No saved credentials found. Please save credentials first (option 1)."
+                )
                 pause()
                 continue
             slow_print("\n📋 Creating or updating inventory...")
@@ -89,7 +98,9 @@ def main():
         elif choice == "3":
             username, password = load_credentials()
             if not username or not password:
-                print("\n⚠️  No saved credentials found. Please save credentials first (option 1).")
+                print(
+                    "\n⚠️  No saved credentials found. Please save credentials first (option 1)."
+                )
                 pause()
                 continue
             slow_print("\n💾 Running configuration backup...")
@@ -99,6 +110,18 @@ def main():
         elif choice == "4":
             slow_print("\n📄 Displaying inventory list...")
             show_inventory()
+            pause()
+
+        elif choice == "5":
+            slow_print("\n📄 Taking snapshots and health check...")
+            devices = load_devices()
+            take_snapshot(devices, base_dir)
+            pause()
+
+        elif choice == "6":
+            slow_print("\n📄 Comparing snapshots...")
+            devices = load_devices()
+            compare(devices, base_dir)
             pause()
 
         elif choice == "q":
