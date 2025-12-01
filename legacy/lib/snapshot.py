@@ -93,7 +93,8 @@ def capture_device_output(creds):
         console.print(f"[red]ERROR: Failed to capture from {hostname}[/red]")
 
 
-def health_check(filename, data, base_dir=None):
+# TODO: Add interfaces CRC
+def health_check(customer_name, data, base_dir=None):
     if base_dir:
         path = os.path.join(base_dir, "legacy", "health_check")
     else:
@@ -102,7 +103,9 @@ def health_check(filename, data, base_dir=None):
     os.makedirs(path, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    health_check_path = os.path.join(path, f"health_check_{timestamp}.xlsx")
+    health_check_path = os.path.join(
+        path, f"{customer_name}_health_check_{timestamp}.xlsx"
+    )
 
     wb: Workbook = Workbook()
     ws: Worksheet = wb.active  # type: ignore
@@ -151,7 +154,7 @@ def health_check(filename, data, base_dir=None):
     print(f"Snapshot saved to {health_check_path}")
 
 
-def take_snapshot(devices, base_dir=None):
+def take_snapshot(devices, customer_name, base_dir=None):
     if base_dir:
         path = os.path.join(base_dir, "legacy", "snapshot")
     else:
@@ -160,7 +163,7 @@ def take_snapshot(devices, base_dir=None):
     os.makedirs(path, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    snapshot_path = os.path.join(path, f"snapshot_{timestamp}.json")
+    snapshot_path = os.path.join(path, f"{customer_name}_snapshot_{timestamp}.json")
 
     result = {}
     for dev in devices:
@@ -172,4 +175,4 @@ def take_snapshot(devices, base_dir=None):
         json.dump(result, f, indent=2)
     print(f"Snapshot saved to {snapshot_path}")
 
-    health_check(f"health_check_{timestamp}.xlsx", result)
+    health_check(customer_name, result)

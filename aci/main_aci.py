@@ -145,7 +145,7 @@ def show_menu():
 
 def main():
     base_dir = None
-    customer_name = None
+    customer_name = "MSI"
 
     while True:
         print_header()
@@ -160,7 +160,9 @@ def main():
             if cookies:
                 cookies, apic_base = login(apic_ip, username, password)
                 # Optional base_dir argument
-                take_snapshot(cookies, apic_base, "snapshot", base_dir=base_dir)
+                take_snapshot(
+                    cookies, apic_base, f"{customer_name}_snapshot", base_dir=base_dir
+                )
                 slow_print("✅ Snapshot completed successfully!")
             else:
                 print("❌ Could not authenticate to APIC.")
@@ -169,15 +171,15 @@ def main():
         elif choice == "2":
             slow_print("\n🩺 Running ACI health check...")
             # Optional base_dir argument
-            main_healthcheck_aci(base_dir=base_dir)
+            main_healthcheck_aci(customer_name, base_dir=base_dir)
             pause()
 
         elif choice == "3":
             slow_print("\n🔍 Comparing last two snapshots...")
             if base_dir:
-                files = sorted(glob.glob(f"{base_dir}/snapshot/snapshot_*.json"))
+                files = sorted(glob.glob(f"{base_dir}/snapshot/*.snapshot_*.json"))
             else:
-                files = sorted(glob.glob("aci/results/snapshot/snapshot_*.json"))
+                files = sorted(glob.glob("aci/results/snapshot/*.snapshot_*.json"))
             if len(files) < 2:
                 print("❌ Not enough snapshot files found to compare.")
             else:
@@ -185,7 +187,7 @@ def main():
                 print(f"📊 Comparing:\n  BEFORE: {before}\n  AFTER:  {after}")
                 result = compare_snapshots(before, after)
                 print_colored_result(result)
-                save_to_excel(result, base_dir=base_dir)
+                save_to_excel(result, customer_name, base_dir=base_dir)
                 print("✅ Comparison results saved to Excel.")
             pause()
 
@@ -196,7 +198,7 @@ def main():
                 print(f"📊 Comparing '{file1}' and '{file2}'...")
                 result = compare_snapshots(file1, file2)
                 print_colored_result(result)
-                save_to_excel(result, base_dir=base_dir)
+                save_to_excel(result, customer_name, base_dir=base_dir)
                 print("✅ Comparison results saved to Excel.")
             else:
                 print("❌ No valid snapshots selected.")

@@ -1101,21 +1101,26 @@ class ACIHealthChecker:
                 return False
 
         def save_report_xlsx(
-            self, data_dict: Dict[str, List[Dict]], base_dir=None
+            self, data_dict: Dict[str, List[Dict]], customer_name, base_dir=None
         ) -> bool:
             """Save report as a single XLSX file with multiple sheets"""
             if not self.ensure_dir(base_dir):
                 self.console.print(f"[red]Error creating directory {base_dir}[/red]")
                 return False
 
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
             if base_dir:
                 filename = os.path.join(
-                    base_dir, "health_check", f"aci_report_{timestamp}.xlsx"
+                    base_dir,
+                    "health_check",
+                    f"{customer_name}_aci_report_{timestamp}.xlsx",
                 )
             else:
                 filename = os.path.join(
-                    "aci", "results", "health_check", f"aci_reports_{timestamp}.xlsx"
+                    "aci",
+                    "results",
+                    "health_check",
+                    f"{customer_name}_aci_reports_{timestamp}.xlsx",
                 )
 
             try:
@@ -1262,7 +1267,7 @@ class ACIHealthChecker:
 
     # -------------------- Main Execution -------------------- #
 
-    def run_health_check(self, base_dir=None):
+    def run_health_check(self, customer_name, base_dir=None):
         """Main function to execute ACI health check"""
         # Get credentials
         self.apic_ip, username, password = self.get_credentials()
@@ -1383,18 +1388,15 @@ class ACIHealthChecker:
             "output_errors": output_errors,
         }
 
-        # Create reports directory
-        reports_dir = "aci_reports"
-
         # Save to single XLSX file with multiple sheets
-        success = data_saver.save_report_xlsx(data_dict, base_dir)
+        data_saver.save_report_xlsx(data_dict, customer_name, base_dir)
 
 
-def main_healthcheck_aci(base_dir=None):
+def main_healthcheck_aci(customer_name, base_dir=None):
     """Main entry point"""
     checker = ACIHealthChecker()
-    checker.run_health_check(base_dir)
+    checker.run_health_check(customer_name, base_dir=base_dir)
 
 
 if __name__ == "__main__":
-    main_healthcheck_aci()
+    main_healthcheck_aci("MSI")

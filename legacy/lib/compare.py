@@ -371,7 +371,7 @@ def save_to_excel(
     wb.save(filepath)
 
 
-def compare(devices, base_dir=None):
+def compare(devices, customer_name, base_dir=None):
     if base_dir:
         path = os.path.join(base_dir, "legacy", "compare")
         snapshot_path = os.path.join(base_dir, "legacy", "snapshot")
@@ -382,7 +382,9 @@ def compare(devices, base_dir=None):
     os.makedirs(path, exist_ok=True)
 
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
-    compare_path = os.path.join(path, f"comparison_result_{timestamp}.xlsx")
+    compare_path = os.path.join(
+        path, f"{customer_name}_comparison_result_{timestamp}.xlsx"
+    )
 
     print(snapshot_path)
     file1, file2 = choose_snapshots(snapshot_path)  # type: ignore

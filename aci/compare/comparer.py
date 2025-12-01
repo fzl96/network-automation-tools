@@ -604,7 +604,7 @@ def print_colored_result(result):
             rprint(f"🔹 [yellow]{section}[/yellow]: (not available)\n")
 
 
-def save_to_excel(result: dict, filename=None, base_dir=None):
+def save_to_excel(result: dict, customer_name, filename=None, base_dir=None):
     # Create directory structure
     if base_dir:
         compare_dir = os.path.join(base_dir, "compare")
@@ -613,8 +613,8 @@ def save_to_excel(result: dict, filename=None, base_dir=None):
     os.makedirs(compare_dir, exist_ok=True)
 
     if filename is None:
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"comparison_result_{timestamp}.xlsx"
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
+        filename = f"{customer_name}_comparison_result_{timestamp}.xlsx"
 
     filepath = os.path.join(compare_dir, filename)
 
