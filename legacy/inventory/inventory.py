@@ -3,7 +3,9 @@ import logging
 from napalm import get_network_driver
 from legacy.creds.credential_manager import load_credentials, save_credentials
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 INVENTORY_FILE = "inventory.csv"
 
@@ -19,7 +21,7 @@ def detect_os_type(ip, username=None, password=None):
                 hostname=ip,
                 username=username,
                 password=password,
-                optional_args={"timeout": 5}
+                optional_args={"timeout": 5},
             )
             device.open()
             facts = device.get_facts()
@@ -177,3 +179,8 @@ def show_inventory():
                     print(f"{row}")
     except FileNotFoundError:
         print("⚠️ No inventory file found. Please create one first.")
+
+
+def load_devices(file="devices.csv"):
+    with open(file, "r") as f:
+        return list(csv.DictReader(f, delimiter=";"))
