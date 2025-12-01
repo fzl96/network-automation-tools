@@ -604,9 +604,7 @@ def print_colored_result(result):
             rprint(f"🔹 [yellow]{section}[/yellow]: (not available)\n")
 
 
-def save_to_excel(
-    result: dict, filename: str | None = None, base_dir: str | None = None
-):
+def save_to_excel(result: dict, filename=None, base_dir=None):
     # Create directory structure
     if base_dir:
         compare_dir = os.path.join(base_dir, "compare")
