@@ -27,16 +27,29 @@ def decrypt_value(value):
 
 
 def detect_os_type(ip, username=None, password=None):
+    # First, try APIC detection (since we know it shows specific banner)
+    apic_result = quick_apic_check(ip, username, password)
+    if apic_result:
+        return apic_result
+    
+    # Then try standard Napalm drivers
     drivers = ["ios", "junos", "nxos", "eos", "iosxr"]
-
+    
     for driver_name in drivers:
         try:
             driver = get_network_driver(driver_name)
+            
+            # Add platform-specific timeouts
+            optional_args = {"timeout": 5}
+            if driver_name in ["nxos", "iosxr"]:
+                optional_args["port"] = 22
+                optional_args["transport"] = "ssh"
+            
             device = driver(
                 hostname=ip,
                 username=username,
                 password=password,
-                optional_args={"timeout": 5},
+                optional_args=optional_args,
             )
             device.open()
             facts = device.get_facts()
@@ -50,41 +63,59 @@ def detect_os_type(ip, username=None, password=None):
 
         except Exception as e:
             msg = str(e).lower()
-            if "auth" in msg or "password" in msg:
+            if "auth" in msg or "password" in msg or "authentication" in msg:
                 return "AUTH_FAIL", None
             continue
 
     return "UNREACHABLE", None
 
 
-def add_to_inventory(ip, hostname, os_type, username, password):
-    enc_password = encrypt_value(password)
-    rows = []
-    found = False
-
+def quick_apic_check(ip, username, password):
+    """Quick check for APIC using banner detection"""
     try:
-        with open(INVENTORY_FILE, "r") as csvfile:
-            reader = csv.reader(csvfile, delimiter=";")
-            for row in reader:
-                if len(row) < 5:
-                    continue
-                if row[1] == ip:
-                    rows.append([hostname, ip, os_type, username, enc_password])
-                    found = True
-                else:
-                    rows.append(row)
-    except FileNotFoundError:
-        pass
+        import paramiko
+        
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        
+        # Quick connect with banner check only
+        client.connect(
+            hostname=ip,
+            username=username,
+            password=password,
+            port=22,
+            timeout=5,
+            banner_timeout=8,
+            look_for_keys=False
+        )
+        
+        # Check the banner that was shown in your logs
+        transport = client.get_transport()
+        if transport:
+            banner = transport.get_banner()
+            if banner and ("Application Policy Infrastructure Controller" in str(banner) or "APIC" in str(banner)):
+                # Quick hostname extraction
+                hostname = "apic"
+                try:
+                    stdin, stdout, stderr = client.exec_command("echo $HOSTNAME", timeout=3)
+                    hn = stdout.read().decode().strip()
+                    if hn:
+                        hostname = hn
+                except:
+                    pass
+                
+                logging.info(f"Detected Cisco APIC on {ip} - Hostname: {hostname}")
+                client.close()
+                return "apic", hostname
+        
+        client.close()
+        return None
+        
+    except paramiko.ssh_exception.AuthenticationException:
+        return "AUTH_FAIL", None
+    except:
+        return None
 
-    if not found:
-        rows.append([hostname, ip, os_type, username, enc_password])
-        print(f"Added {hostname} ({ip}, {os_type})")
-    else:
-        print(f"Updated {hostname} ({ip}, {os_type})")
-
-    with open(INVENTORY_FILE, "w", newline="") as csvfile:
-        writer = csv.writer(csvfile, delimiter=";")
-        writer.writerows(rows)
 
 
 def auto_fix_inventory(username, password):
