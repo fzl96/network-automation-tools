@@ -2,38 +2,42 @@ import os
 import json
 from cryptography.fernet import Fernet
 
-KEY_FILE = os.path.join(os.path.dirname(__file__), "key.key")
-CRED_FILE = os.path.join(os.path.dirname(__file__), "credentials.json")
+BASE_DIR = os.path.dirname(__file__)
+KEY_FILE = os.path.join(BASE_DIR, "key.key")
+CRED_FILE = os.path.join(BASE_DIR, "credentials.json")
 
 def generate_key():
-    """Generate a new encryption key if it doesn't exist."""
     if not os.path.exists(KEY_FILE):
         key = Fernet.generate_key()
         with open(KEY_FILE, "wb") as key_file:
             key_file.write(key)
 
 def load_key():
-    """Load the encryption key."""
     with open(KEY_FILE, "rb") as key_file:
         return key_file.read()
 
-def save_credentials(username, password):
-    """Encrypt and save credentials."""
+def save_credentials(profile_name, username, password):
     generate_key()
     key = load_key()
     fernet = Fernet(key)
 
-    data = {
+    if os.path.exists(CRED_FILE):
+        with open(CRED_FILE, "r") as f:
+            data = json.load(f)
+    else:
+        data = {}
+
+    data[profile_name] = {
         "username": fernet.encrypt(username.encode()).decode(),
         "password": fernet.encrypt(password.encode()).decode()
     }
 
-    with open(CRED_FILE, "w") as cred_file:
-        json.dump(data, cred_file)
-    print("✅ Credentials saved securely.")
+    with open(CRED_FILE, "w") as f:
+        json.dump(data, f, indent=4)
 
-def load_credentials():
-    """Decrypt and load saved credentials."""
+    print(f"✅ Credentials saved for profile '{profile_name}'.")
+
+def load_credentials(profile_name="default"):
     if not os.path.exists(CRED_FILE):
         print("⚠️ No saved credentials found.")
         return None, None
@@ -41,9 +45,27 @@ def load_credentials():
     key = load_key()
     fernet = Fernet(key)
 
-    with open(CRED_FILE, "r") as cred_file:
-        data = json.load(cred_file)
+    with open(CRED_FILE, "r") as f:
+        data = json.load(f)
 
-    username = fernet.decrypt(data["username"].encode()).decode()
-    password = fernet.decrypt(data["password"].encode()).decode()
+    if profile_name not in data:
+        print(f"⚠️ No credentials found for profile '{profile_name}'.")
+        return None, None
+
+    enc_user = data[profile_name]["username"]
+    enc_pass = data[profile_name]["password"]
+
+    username = fernet.decrypt(enc_user.encode()).decode()
+    password = fernet.decrypt(enc_pass.encode()).decode()
+
     return username, password
+
+
+def list_profiles():
+    if not os.path.exists(CRED_FILE):
+        return []
+
+    with open(CRED_FILE, "r") as f:
+        data = json.load(f)
+
+    return list(data.keys())

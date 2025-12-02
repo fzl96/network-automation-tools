@@ -79,7 +79,7 @@ def main():
             slow_print("\n🔐 Saving credentials securely...")
             username = input("Enter username: ").strip()
             password = getpass.getpass("Enter Password (default hidden): ")
-            save_credentials(username, password)
+            save_credentials("default", username, password)
             slow_print("✅ Credentials saved successfully!")
             pause()
 

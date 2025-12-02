@@ -6,6 +6,7 @@ import time
 import logging
 from datetime import datetime
 from typing import List, Dict, Optional
+from legacy.inventory.inventory import detect_os_type
 
 from napalm import get_network_driver
 from rich.console import Console
@@ -53,17 +54,36 @@ def slow_print(text: str, delay: float = 0.02) -> None:
 
 
 def load_inventory() -> List[Dict[str, str]]:
-    """Load inventory from CSV file."""
     devices = []
     try:
         with open(INVENTORY_FILE, "r") as csvfile:
             reader = csv.reader(csvfile)
             for row in reader:
-                if len(row) >= 2:
-                    devices.append({"ip": row[0].strip(), "os": row[1].strip()})
+                if not row:
+                    continue
+
+                # Split semicolon fields
+                fields = row[0].split(";")
+                fields += [""] * (5 - len(fields))
+
+                name, ip, os_type, username, password = fields
+
+                driver = row[1].strip() if len(row) > 1 else os_type
+
+                devices.append({
+                    "name": name,
+                    "ip": ip,
+                    "os": os_type,
+                    "username": username,
+                    "password": password,
+                    "driver": driver
+                })
+
     except FileNotFoundError:
-        console.print("[yellow]⚠️ Inventory file not found. Please create inventory first.[/yellow]")
+        console.print("[yellow]⚠ Inventory file missing[/yellow]")
+
     return devices
+
 
 # === DETECT OS FUNCTIONS ===
 def detect_os(ip: str, username: str, password: str) -> str:
@@ -106,34 +126,31 @@ def detect_os(ip: str, username: str, password: str) -> str:
 
     return "ios"  # Default fallback
 
-def auto_update_inventory(username: str, password: str) -> List[Dict[str, str]]:
-    """Auto-detect OS for all IPs in inventory.csv and rewrite inventory."""
-    new_inventory = []
+def auto_update_inventory(devices: List[Dict[str, str]], username: str, password: str) -> List[Dict[str, str]]:
+    updated = []
 
-    try:
-        with open(INVENTORY_FILE, "r") as csvfile:
-            reader = csv.reader(csvfile)
-            for row in reader:
-                ip = row[0].strip()
-                console.print(f"[cyan]🔍 Detecting OS for {ip}...[/cyan]")
+    for dev in devices:
+        ip = dev["ip"]
+        user = dev["username"]
+        pwd = dev["password"]
 
-                os_type = detect_os(ip, username, password)
-                console.print(f"[green]✔ {ip} detected as {os_type}[/green]")
+        console.print(f"[cyan]🔍 Detecting OS for {ip}...[/cyan]")
 
-                new_inventory.append({"ip": ip, "os": os_type})
+        os_type, hostname = detect_os_type(ip, user, pwd)
 
-        # Rewrite updated inventory
-        with open(INVENTORY_FILE, "w", newline="") as csvfile:
-            writer = csv.writer(csvfile)
-            for dev in new_inventory:
-                writer.writerow([dev["ip"], dev["os"]])
+        if os_type in ("AUTH_FAIL", "UNREACHABLE"):
+            console.print(f"[red]❌ OS detection failed for {ip} — keeping original[/red]")
+            updated.append(dev)
+            continue
 
-        console.print("[bold green]✅ Inventory updated with detected OS![/bold green]")
+        console.print(f"[green]✔ {ip} detected as {os_type}, hostname {hostname}[/green]")
 
-    except Exception as e:
-        console.print(f"[red]❌ Failed updating inventory: {e}[/red]")
+        dev["os"] = os_type
+        dev["hostname"] = hostname
 
-    return new_inventory
+        updated.append(dev)
+
+    return updated
 
 # === BACKUP FUNCTIONS ===
 def backup_configs(device: Dict[str, str], username: str, password: str) -> None:
@@ -239,7 +256,9 @@ def display_inventory_table(devices: List[Dict[str, str]]) -> None:
 # === MAIN LOGIC ===
 def run_backup(username: Optional[str] = None, password: Optional[str] = None) -> None:
     """Main function to handle user menu and backup options."""
-    devices = auto_update_inventory(username, password)
+    devices = load_inventory()
+    devices = auto_update_inventory(devices, username, password)
+
     if not devices:
         console.print("[yellow]⚠️ No devices found in inventory. Please create an inventory first.[/yellow]")
         return

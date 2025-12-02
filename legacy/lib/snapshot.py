@@ -22,13 +22,30 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 console = Console()
 
+def map_os_to_device_type(os_type: str) -> str:
+    os_type = os_type.lower()
+
+    mapping = {
+        "ios": "cisco_ios",
+        "iosxe": "cisco_ios",
+        "nxos": "cisco_nxos",
+        "eos": "arista_eos",
+        "junos": "juniper_junos",
+        "iosxr": "cisco_xr",
+    }
+
+    return mapping.get(os_type, "cisco_ios")  # safe default
 
 def connect_to_device(creds):
     hostname = creds["hostname"]
     ip = creds["ip"]
-    creds = {
-        "device_type": creds["device_type"],
-        "ip": creds["ip"],
+
+    # NEW: derive device_type from inventory OS field
+    device_type = map_os_to_device_type(creds["os"])
+
+    params = {
+        "device_type": device_type,
+        "ip": ip,
         "username": creds["username"],
         "password": creds["password"],
         "secret": creds["password"],
@@ -36,25 +53,23 @@ def connect_to_device(creds):
     }
 
     try:
-        device = ConnectHandler(**creds)
+        device = ConnectHandler(**params)
         device.enable()
         return device
 
     except NetMikoTimeoutException:
         with open("connect_error.csv", "a") as file:
-            file.write(f"{hostname};{ip};Device Unreachable/SSH not enabled")
+            file.write(f"{hostname};{ip};Device Unreachable/SSH not enabled\n")
         return None
 
     except NetMikoAuthenticationException:
         with open("connect_error.csv", "a") as file:
-            file.write(f"{hostname};{ip};Authentication failure")
+            file.write(f"{hostname};{ip};Authentication failure\n")
         return None
-
 
 def capture_device_output(creds):
     hostname = creds["hostname"]
-    device_type = creds["device_type"]
-
+    device_type = map_os_to_device_type(creds["os"])
     conn = connect_to_device(creds)
 
     if conn:
