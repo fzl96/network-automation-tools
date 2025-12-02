@@ -110,7 +110,7 @@ def detect_os_type(ip, username=None, password=None):
 
 
 def quick_apic_check(ip, username, password):
-    """Quick check for APIC"""
+    """Simple APIC detection without risky hostname extraction"""
     try:
         import paramiko
         
@@ -129,25 +129,19 @@ def quick_apic_check(ip, username, password):
         transport = client.get_transport()
         if transport:
             banner = transport.get_banner()
-            if banner and ("Application Policy Infrastructure Controller" in str(banner) or "APIC" in str(banner)):
-                hostname = "apic"
-                try:
-                    stdin, stdout, stderr = client.exec_command("hostname", timeout=3)
-                    hostname = stdout.read().decode().strip() or "apic"
-                except:
-                    pass
-                
-                logging.info(f"Detected Cisco APIC on {ip} - Hostname: {hostname}")
+            # Check for APIC banner (from your logs)
+            if banner and "Application Policy Infrastructure Controller" in str(banner):
+                logging.info(f"Detected APIC banner on {ip}")
                 client.close()
-                return "apic", hostname
+                # Use a safe default hostname
+                return "apic", "apic-controller"
         
         client.close()
         return None
         
     except paramiko.ssh_exception.AuthenticationException:
         return "AUTH_FAIL", None
-    except Exception as e:
-        logging.debug(f"APIC check failed for {ip}: {str(e)[:100]}")
+    except Exception:
         return None
 
 
@@ -282,7 +276,34 @@ def detect_nxos_fallback(ip, username, password):
     
     return None
 
+def add_to_inventory(ip, hostname, os_type, username, password):
+    enc_password = encrypt_value(password)
+    rows = []
+    found = False
 
+    try:
+        with open(INVENTORY_FILE, "r") as csvfile:
+            reader = csv.reader(csvfile, delimiter=";")
+            for row in reader:
+                if len(row) < 5:
+                    continue
+                if row[1] == ip:
+                    rows.append([hostname, ip, os_type, username, enc_password])
+                    found = True
+                else:
+                    rows.append(row)
+    except FileNotFoundError:
+        pass
+
+    if not found:
+        rows.append([hostname, ip, os_type, username, enc_password])
+        print(f"Added {hostname} ({ip}, {os_type})")
+    else:
+        print(f"Updated {hostname} ({ip}, {os_type})")
+
+    with open(INVENTORY_FILE, "w", newline="") as csvfile:
+        writer = csv.writer(csvfile, delimiter=";")
+        writer.writerows(rows)
 
 def auto_fix_inventory(username, password):
     print("Checking inventory for incomplete entries...")
