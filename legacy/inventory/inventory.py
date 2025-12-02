@@ -120,10 +120,10 @@ def detect_os_type(ip, username=None, password=None):
 
 
 def quick_apic_check(ip, username, password):
-    """Detect APIC after login by checking CLI identity instead of banner."""
+    """Detect APIC by parsing 'show versions' and extracting controller hostname."""
     try:
         import paramiko
-        
+
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
@@ -136,23 +136,66 @@ def quick_apic_check(ip, username, password):
             auth_timeout=8
         )
 
-        # Open a session
-        stdin, stdout, stderr = client.exec_command("show version", timeout=5)
-        output = stdout.read().decode(errors="ignore").lower()
+        # Menggunakan cmd 'show versions' (format tabel Role/Pod/Node/Name/Version)
+        stdin, stdout, stderr = client.exec_command("show versions", timeout=5)
+        output = stdout.read().decode("utf-8", errors="ignore")
 
         client.close()
 
-        # APIC always reveals itself in "show version"
-        if any(keyword in output for keyword in [
+        hostname = None
+
+        for line in output.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                continue
+
+            
+            low = stripped.lower()
+            if low.startswith("role"):
+                continue
+            if all(ch in "- " for ch in stripped):
+                continue
+
+            parts = stripped.split()
+            
+            if len(parts) < 5:
+                continue
+
+            role = parts[0].lower()
+            if role != "controller":
+                continue
+
+            
+            name_tokens = parts[3:-1]
+            if name_tokens:
+                hostname = " ".join(name_tokens)
+            else:
+                hostname = parts[3]
+
+            logging.info(
+                f"Detected APIC via 'show versions' on {ip} - Hostname: {hostname}"
+            )
+            return "apic", hostname
+
+        # Fallback: if tabel format has keyword APIC
+        lowered = output.lower()
+        if any(keyword in lowered for keyword in [
             "cisco apic",
             "application policy infrastructure controller",
             "aci fabric",
             "aci version"
         ]):
-            logging.info(f"Detected APIC CLI output on {ip}")
+            logging.info(f"Detected APIC CLI output (fallback) on {ip}")
             return "apic", "apic-controller"
 
         return None
+
+    except paramiko.ssh_exception.AuthenticationException:
+        return "AUTH_FAIL", None
+    except Exception as e:
+        logging.debug(f"APIC check error on {ip}: {e}")
+        return None
+
 
     except paramiko.ssh_exception.AuthenticationException:
         return "AUTH_FAIL", None

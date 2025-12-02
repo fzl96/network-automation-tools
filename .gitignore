@@ -6,3 +6,4 @@ legacy/results
 legacy/backup_config
 aci/results
 inventory.csv
+legacy/creds/credentials.json
