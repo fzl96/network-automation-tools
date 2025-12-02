@@ -120,38 +120,44 @@ def detect_os_type(ip, username=None, password=None):
 
 
 def quick_apic_check(ip, username, password):
-    """Simple APIC detection without risky hostname extraction"""
+    """Detect APIC after login by checking CLI identity instead of banner."""
     try:
         import paramiko
         
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        
+
         client.connect(
             hostname=ip,
             username=username,
             password=password,
-            port=22,
-            timeout=5,
+            timeout=8,
             banner_timeout=8,
+            auth_timeout=8
         )
-        
-        transport = client.get_transport()
-        if transport:
-            banner = transport.get_banner()
-            # Check for APIC banner (from your logs)
-            if banner and "Application Policy Infrastructure Controller" in str(banner):
-                logging.info(f"Detected APIC banner on {ip}")
-                client.close()
-                # Use a safe default hostname
-                return "apic", "apic-controller"
-        
+
+        # Open a session
+        stdin, stdout, stderr = client.exec_command("show version", timeout=5)
+        output = stdout.read().decode(errors="ignore").lower()
+
         client.close()
+
+        # APIC always reveals itself in "show version"
+        if any(keyword in output for keyword in [
+            "cisco apic",
+            "application policy infrastructure controller",
+            "aci fabric",
+            "aci version"
+        ]):
+            logging.info(f"Detected APIC CLI output on {ip}")
+            return "apic", "apic-controller"
+
         return None
-        
+
     except paramiko.ssh_exception.AuthenticationException:
         return "AUTH_FAIL", None
-    except Exception:
+    except Exception as e:
+        logging.debug(f"APIC check error on {ip}: {e}")
         return None
 
 
