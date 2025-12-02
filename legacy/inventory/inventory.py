@@ -33,12 +33,16 @@ def detect_os_type(ip, username=None, password=None):
         return apic_result
     
     # Try drivers in optimal order for Cisco devices
-    # Note: Don't include "apic" in this list since it's not a real Napalm driver
     drivers = ["ios", "nxos_ssh", "nxos", "iosxr", "junos", "eos"]
     
     for driver_name in drivers:
         try:
             logging.debug(f"Trying driver: {driver_name} for {ip}")
+            optional_args = {
+                "timeout": 10,
+                "banner_timeout": 15,
+                "session_timeout": 20
+            }
             
             # Special handling for NX-OS SSH
             if driver_name == "nxos_ssh":
