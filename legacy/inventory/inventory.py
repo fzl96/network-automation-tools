@@ -33,7 +33,7 @@ def detect_os_type(ip, username=None, password=None):
         return apic_result
     
     # Try drivers in optimal order for Cisco devices
-    drivers = ["ios", "nxos_ssh", "nxos", "iosxr", "junos", "eos"]
+    drivers = ["ios", "nxos_ssh", "nxos", "iosxr","junos","eos"]
     
     for driver_name in drivers:
         try:
@@ -92,8 +92,14 @@ def detect_os_type(ip, username=None, password=None):
             hostname = facts.get("hostname", "Unknown")
             os_ver = facts.get("os_version", "Unknown")
 
+
+            if driver_name == "ios" and os_ver == "Unknown":
+                logging.debug(f"IOS driver returned unknown OS version on {ip}, trying next driver")
+                continue
+
             logging.info(f"Detected {os_ver} on {ip} ({driver_name}) - Hostname: {hostname}")
             return driver_name, hostname
+
 
         except Exception as e:
             error_msg = str(e).lower()
