@@ -1,3 +1,4 @@
+import csv
 import os
 import re
 from datetime import datetime
@@ -8,18 +9,30 @@ from netmiko import (
 )
 from netmiko.base_connection import BaseConnection
 from rich.console import Console
+from cryptography.fernet import Fernet
+from typing import Dict, List, Any, cast
+
+KEY_FILE = os.path.join("legacy/creds", "key.key")
 
 console = Console()
 
 
+def load_key():
+    with open(KEY_FILE, "rb") as key_file:
+        return key_file.read()
+
+
 def connect_to_device(creds):
-    hostname = creds["hostname"]
+    key = load_key()
+    fernet = Fernet(key)
+    hostname = creds["name"]
     ip = creds["ip"]
+
     creds = {
         "device_type": creds["device_type"],
         "ip": creds["ip"],
         "username": creds["username"],
-        "password": creds["password"],
+        "password": fernet.decrypt(creds["password"].encode()).decode(),
         "secret": creds["password"],
         "fast_cli": False,
     }
@@ -65,43 +78,48 @@ def show_version(conn: BaseConnection, device_type: str):
 
 def show_resources(conn: BaseConnection, device_type: str):
     try:
-        # cpu, memory = 0, 0
+        cpu_util = "0%"
+        mem_util = "0%"
+        storage_util = "0%"
 
         if "nxos" not in device_type:
+            # Be explicit for the type-checker
             proc_cpu = conn.send_command("show proc cpu")
             proc_mem = conn.send_command("show proc mem sort")
+            sh_dir_output = conn.send_command("dir | sec free")
+
             # env_fan = conn.send_command("show environment fan")
             # env_power = conn.send_command("show environment power", use_textfsm=True)
             # print(env_power)
 
-            r_cpu = re.search(r"\s+five minutes:\s(\d+)%", proc_cpu)
+            # CPU
+            r_cpu = re.search(r"\s+five minutes:\s(\d+)%", str(proc_cpu))
+            if r_cpu:
+                cpu_util = f"{r_cpu.group(1)}%"
+
+            # MEMORY
             r_mem = re.search(
-                r"Processor Pool Total:\s+(\d+)\s+Used:\s+(\d+)", proc_mem
+                r"Processor Pool Total:\s+(\d+)\s+Used:\s+(\d+)", str(proc_mem)
             )
-            cpu_util = f"{r_cpu.group(1)}%" if r_cpu else "0%"
             if r_mem:
                 total_ram = int(r_mem.group(1))
                 used_ram = int(r_mem.group(2))
                 if total_ram > 0:
                     mem_perc = (used_ram / total_ram) * 100
                     mem_util = f"{mem_perc:.2f}%"
-            else:
-                mem_util = "0%"
 
             # STORAGE
-            sh_dir_output = conn.send_command("dir | sec free")
             r_dir = re.search(
-                r"(\d+)\s+bytes\s+total\s+\((\d+)\s+bytes\s+free\)", sh_dir_output
+                r"(\d+)\s+bytes\s+total\s+\((\d+)\s+bytes\s+free\)",
+                str(sh_dir_output),
             )
-
             if r_dir:
                 total_storage_bytes = int(r_dir.group(1))
-                used_storage_bytes = total_storage_bytes - int(r_dir.group(2))
+                free_storage_bytes = int(r_dir.group(2))
                 if total_storage_bytes > 0:
+                    used_storage_bytes = total_storage_bytes - free_storage_bytes
                     storage_perc = (used_storage_bytes / total_storage_bytes) * 100
                     storage_util = f"{storage_perc:.2f}%"
-            else:
-                storage_util = "0%"
 
             return {
                 "cpu_utilization": cpu_util,
@@ -109,34 +127,29 @@ def show_resources(conn: BaseConnection, device_type: str):
                 "storage_utilization": storage_util,
             }
 
-        system_resources = conn.send_command("show system resources")
-        # fan = conn.send_command("show environment fan", use_textfsm=True)
-        # power = conn.send_command("show environment power", use_textfsm=True)
-        # print(json.dumps(fan, indent=2))
-        # print(json.dumps(power, indent=2))
+        # NXOS
+        system_resources = str(conn.send_command("show system resources"))
+        dir_output = str(conn.send_command("dir | in bytes"))
 
+        ## CPU
         r_cpu = re.search(
             r"CPU\s+states\s+:\s+([\d.]+)%\s+user,\s+([\d.]+)%\s+kernel",
             system_resources,
         )
-        cpu_util = (
-            f"{float(r_cpu.group(1)) + float(r_cpu.group(2)):.2f}%" if r_cpu else "0%"
-        )
+        if r_cpu:
+            cpu_util = f"{float(r_cpu.group(1)) + float(r_cpu.group(2)):.2f}%"
 
+        ## MEMORY
         r_mem = re.search(
             r"Memory usage:\s+(\d+)K\s+total,\s+(\d+)K\sused", system_resources
         )
-
         if r_mem:
             total_mem = int(r_mem.group(1))
             used_mem = int(r_mem.group(2))
             if total_mem > 0:
                 mem_util = f"{(used_mem / total_mem) * 100:.2f}%"
-        else:
-            mem_util = 0
 
-        # STORAGE
-        dir_output = conn.send_command("dir | in bytes")
+        ## STORAGE
         r_used = re.search(r"(\d+)\s+bytes\s+used", dir_output)
         r_total = re.search(r"(\d+)\s+bytes\s+total", dir_output)
         used_storage = int(r_used.group(1)) if r_used else 0
@@ -144,8 +157,6 @@ def show_resources(conn: BaseConnection, device_type: str):
         if total_storage > 0:
             storage_perc = (used_storage / total_storage) * 100
             storage_util = f"{storage_perc:.2f}%"
-        else:
-            storage_util = "0%"
 
         return {
             "cpu_utilization": cpu_util,
@@ -158,21 +169,26 @@ def show_resources(conn: BaseConnection, device_type: str):
         return {}
 
 
-def show_interface(conn: BaseConnection, device_type: str):
-    try:
-        show_interfaces = conn.send_command("show interface", use_textfsm=True)
+Item = Dict[str, Any]
 
-        # 🔁 Normalize keys so ALL platforms use "protocol_status"
+
+def show_interface(conn: BaseConnection) -> List[Item]:
+    try:
+        raw = conn.send_command("show interface", use_textfsm=True)
+
+        # Tell the type checker what TextFSM actually returns:
+        show_interfaces = cast(List[Item], raw)
+
+        # Normalize protocol_status
         for item in show_interfaces:
-            # if protocol_status is missing, try to fill it from admin_state (NXOS)
-            if "protocol_status" not in item or not item.get("protocol_status"):
+            if not item.get("protocol_status"):
                 item["protocol_status"] = item.get("admin_state", "")
 
-        # ✅ Unified fields for BOTH IOS and NXOS
+        # Unified fields for BOTH IOS and NXOS
         fields = [
             "interface",
             "link_status",
-            "protocol_status",  # normalized key
+            "protocol_status",
             "description",
             "ip_address",
             "prefix_length",
@@ -183,7 +199,7 @@ def show_interface(conn: BaseConnection, device_type: str):
             "crc",
         ]
 
-        filtered = [
+        filtered: List[Item] = [
             {key: item.get(key, "") for key in fields} for item in show_interfaces
         ]
 
@@ -191,7 +207,7 @@ def show_interface(conn: BaseConnection, device_type: str):
 
     except Exception as e:
         print(f"Errors: {e}")
-        return None
+        return []
 
 
 def show_spanning_tree_detail(conn: BaseConnection, device_type: str):
@@ -206,41 +222,51 @@ def show_spanning_tree_root(conn: BaseConnection, device_type: str):
     print("show_version")
 
 
-def show_mac_address_table(conn: BaseConnection, device_type: str):
+def show_mac_address_table(
+    conn: BaseConnection,
+) -> List[Dict[str, str]]:
     try:
-        mac_table = conn.send_command("show mac address-table", use_textfsm=True)
+        raw = conn.send_command("show mac address-table", use_textfsm=True)
 
-        normalized = []
+        # TextFSM output: list of dicts (IOS & NXOS)
+        mac_table = cast(List[Item], raw)
+
+        normalized: List[Dict[str, str]] = []
 
         for item in mac_table:
-            entry = {}
+            if not isinstance(item, dict):
+                # Defensive: skip weird entries
+                continue
+
+            entry: Dict[str, str] = {}
 
             # VLAN is common on both
-            entry["vlan_id"] = item.get("vlan_id", "")
+            entry["vlan_id"] = str(item.get("vlan_id", ""))
 
             # 🔁 Normalize MAC address key
             entry["mac_address"] = (
-                item.get("mac_address") or item.get("destination_address") or ""
+                str(item.get("mac_address"))
+                if item.get("mac_address") is not None
+                else str(item.get("destination_address", ""))
             )
 
             # 🔁 Normalize type
-            entry["type"] = item.get("type", "")
+            entry["type"] = str(item.get("type", ""))
 
             # 🔁 Normalize ports (string in NXOS, list in IOS)
             ports = item.get("ports") or item.get("destination_port") or ""
-
-            # Convert IOS list → "Gi1/0/1"
             if isinstance(ports, list):
-                ports = ",".join(ports)
+                ports = ",".join(str(p) for p in ports)
 
-            entry["ports"] = ports
+            entry["ports"] = str(ports)
 
             normalized.append(entry)
 
         return normalized
+
     except Exception as e:
         print(f"Errors: {e}")
-        return None
+        return []
 
 
 def show_ip_route(conn: BaseConnection, device_type: str):
@@ -396,7 +422,7 @@ def show_arp(conn: BaseConnection, device_type: str):
 def show_logg(conn: BaseConnection, device_type: str):
     try:
         logs = []
-        logg = conn.send_command("show logg | in %SYS-5-")
+        logg = str(conn.send_command("show logg | in %SYS-5-"))
         logs.extend(re.findall(r"%SYS-5-\S+: .*", logg))
         logs.extend(re.findall(r"SYS-5-\S+: .*", logg))
 
@@ -457,9 +483,10 @@ def collect_data_mantools(creds):
             return combined
         except Exception as e:
             print(f"Errors: {e}")
-            return None
+            return ""
     else:
         print(f"ERROR: Failed to capture from {hostname}")
+        return ""
 
 
 def collect_devices_data(devices, customer_name, base_dir=None):
@@ -475,3 +502,31 @@ def collect_devices_data(devices, customer_name, base_dir=None):
         data = collect_data_mantools(dev)
         with open(os.path.join(path, f"{hostname}.txt"), "w") as f:
             f.write(data)
+
+
+def load_devices(file="inventory.csv"):
+    devices = []
+    try:
+        with open(file, "r") as f:
+            reader = csv.reader(f, delimiter=";")
+
+            for row in reader:
+                if len(row) != 5:
+                    continue
+
+                hostname, ip, os_type, username, enc_password = row
+
+                devices.append(
+                    {
+                        "hostname": hostname,
+                        "ip": ip,
+                        "os": os_type,
+                        "username": username,
+                        "password": enc_password,
+                    }
+                )
+
+        return devices
+
+    except FileNotFoundError:
+        return []

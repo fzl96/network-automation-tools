@@ -118,7 +118,7 @@ def main():
         elif choice == "5":
             slow_print("\n📄 Taking snapshots and health check...")
             devices = load_devices()
-            take_snapshot(devices, customer_name, base_dir)
+            take_snapshot(customer_name, base_dir)
             pause()
 
         elif choice == "6":
