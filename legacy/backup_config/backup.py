@@ -4,17 +4,22 @@ import csv
 import sys
 import time
 import logging
+import paramiko
 from datetime import datetime
 from typing import List, Dict, Optional
 from legacy.inventory.inventory import detect_os_type
 from legacy.customer_context import get_customer_name
-customer = get_customer_name()
-
 from napalm import get_network_driver
 from rich.console import Console
 from rich.table import Table
+from legacy.lib.utils import load_key
+from napalm.base.base import NetworkDriver
+from cryptography.fernet import Fernet
 
-import paramiko
+
+KEY_FILE = os.path.join("legacy/creds", "key.key")
+
+customer = get_customer_name()
 
 # === CONFIGURATION ===
 INVENTORY_FILE = "inventory.csv"
@@ -22,8 +27,7 @@ BACKUP_DIR = "legacy/backup_config/output"
 
 # === LOGGING SETUP ===
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
 # === RICH CONSOLE ===
@@ -72,14 +76,16 @@ def load_inventory() -> List[Dict[str, str]]:
 
                 driver = row[1].strip() if len(row) > 1 else os_type
 
-                devices.append({
-                    "name": name,
-                    "ip": ip,
-                    "os": os_type,
-                    "username": username,
-                    "password": password,
-                    "driver": driver
-                })
+                devices.append(
+                    {
+                        "name": name,
+                        "ip": ip,
+                        "os": os_type,
+                        "username": username,
+                        "password": password,
+                        "driver": driver,
+                    }
+                )
 
     except FileNotFoundError:
         console.print("[yellow]⚠ Inventory file missing[/yellow]")
@@ -87,48 +93,53 @@ def load_inventory() -> List[Dict[str, str]]:
     return devices
 
 
-# === DETECT OS FUNCTIONS ===
-def detect_os(ip: str, username: str, password: str) -> str:
-    """Detect OS and return napalm driver name."""
-    try:
-        # SSH banner detection
-        client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        client.connect(ip, username=username, password=password, timeout=5, look_for_keys=False)
-        banner = client.get_transport().remote_version.lower()
-        client.close()
+# # === DETECT OS FUNCTIONS ===
+# def detect_os(ip: str, username: str, password: str) -> str:
+#     """Detect OS and return napalm driver name."""
+#     try:
+#         # SSH banner detection
+#         client = paramiko.SSHClient()
+#         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+#         client.connect(
+#             ip, username=username, password=password, timeout=5, look_for_keys=False
+#         )
+#         banner = client.get_transport().remote_version.lower()
+#         client.close()
+#
+#         if "cisco" in banner:
+#             if "ios-xe" in banner or "iosxe" in banner:
+#                 return "ios"
+#             if "nx-os" in banner or "nexus" in banner:
+#                 return "nxos"
+#             if "asa" in banner:
+#                 return "asa"
+#
+#         if "juniper" in banner or "junos" in banner:
+#             return "junos"
+#
+#         if "arista" in banner or "eos" in banner:
+#             return "eos"
+#
+#     except Exception:
+#         pass  # Fall back to driver probing
+#
+#     # NAPALM probe
+#     for drv in ["ios", "nxos", "asa", "junos", "eos"]:
+#         try:
+#             driver = get_network_driver(drv)
+#             conn = driver(hostname=ip, username=username, password=password)
+#             conn.open()
+#             conn.close()
+#             return drv
+#         except:
+#             continue
+#
+#     return "ios"  # Default fallback
 
-        if "cisco" in banner:
-            if "ios-xe" in banner or "iosxe" in banner:
-                return "ios"
-            if "nx-os" in banner or "nexus" in banner:
-                return "nxos"
-            if "asa" in banner:
-                return "asa"
 
-        if "juniper" in banner or "junos" in banner:
-            return "junos"
-
-        if "arista" in banner or "eos" in banner:
-            return "eos"
-
-    except Exception:
-        pass  # Fall back to driver probing
-
-    # NAPALM probe
-    for drv in ["ios", "nxos", "asa", "junos", "eos"]:
-        try:
-            driver = get_network_driver(drv)
-            conn = driver(hostname=ip, username=username, password=password)
-            conn.open()
-            conn.close()
-            return drv
-        except:
-            continue
-
-    return "ios"  # Default fallback
-
-def auto_update_inventory(devices: List[Dict[str, str]], username: str, password: str) -> List[Dict[str, str]]:
+def auto_update_inventory(
+    devices: List[Dict[str, str]], username: str, password: str
+) -> List[Dict[str, str]]:
     updated = []
 
     for dev in devices:
@@ -141,11 +152,15 @@ def auto_update_inventory(devices: List[Dict[str, str]], username: str, password
         os_type, hostname = detect_os_type(ip, user, pwd)
 
         if os_type in ("AUTH_FAIL", "UNREACHABLE"):
-            console.print(f"[red]❌ OS detection failed for {ip} — keeping original[/red]")
+            console.print(
+                f"[red]❌ OS detection failed for {ip} — keeping original[/red]"
+            )
             updated.append(dev)
             continue
 
-        console.print(f"[green]✔ {ip} detected as {os_type}, hostname {hostname}[/green]")
+        console.print(
+            f"[green]✔ {ip} detected as {os_type}, hostname {hostname}[/green]"
+        )
 
         dev["os"] = os_type
         dev["hostname"] = hostname
@@ -154,17 +169,46 @@ def auto_update_inventory(devices: List[Dict[str, str]], username: str, password
 
     return updated
 
-# === BACKUP FUNCTIONS ===
-def backup_configs(device: Dict[str, str], username: str, password: str) -> None:
-    """Backup configuration from a single device."""
-    ip, driver_name = device["ip"], device["os"]
+
+def connect_to_device(device: Dict[str, str]) -> NetworkDriver:
+    key = load_key()
+    fernet = Fernet(key)
+
+    ip = device["ip"]
+    driver_name = device["os"]
+    username = device.get("username")
+    enc_password = device.get("password")
+
+    # Validate credentials
+    if not username or not enc_password:
+        raise ValueError(f"Missing username/password for {ip}")
 
     try:
-        logging.info(f"Connecting to {ip} using {driver_name} driver...")
         driver = get_network_driver(driver_name)
-        device_conn = driver(hostname=ip, username=username, password=password)
-        device_conn.open()
+        conn = driver(
+            hostname=ip,
+            username=username,
+            password=fernet.decrypt(enc_password.encode()).decode(),
+        )
+        return conn
+    except Exception as e:
+        # wrap with a more specific message
+        raise RuntimeError(f"Failed to connect to {ip}: {e}") from e
 
+
+# === BACKUP FUNCTIONS ===
+def backup_configs(device) -> None:
+    ip = device["ip"]
+
+    try:
+        device_conn = connect_to_device(device)
+    except Exception as e:
+        logging.error(f"Failed to back up {ip}: {e}")
+        console.print(f"[red]❌ Error backing up {ip}: {e}[/red]")
+        return
+
+    try:
+        device_conn.open()
         facts = device_conn.get_facts()
         hostname = facts.get("hostname", ip)
         configs = device_conn.get_config()
@@ -175,10 +219,14 @@ def backup_configs(device: Dict[str, str], username: str, password: str) -> None
 
         for cfg_type, cfg_content in configs.items():
             if cfg_content:
-                filename = os.path.join(device_dir, f"{customer}_{hostname}_{cfg_type}_{timestamp}.cfg")
+                filename = os.path.join(
+                    device_dir, f"{customer}_{hostname}_{cfg_type}_{timestamp}.cfg"
+                )
                 with open(filename, "w") as f:
-                    f.write(cfg_content) # type: ignore
-                console.print(f"[green]✅ [{hostname}] Saved {cfg_type} config → {filename}[/green]")
+                    f.write(cfg_content)  # type: ignore
+                console.print(
+                    f"[green]✅ [{hostname}] Saved {cfg_type} config → {filename}[/green]"
+                )
 
         device_conn.close()
         logging.info(f"Backup completed for {ip}")
@@ -188,14 +236,17 @@ def backup_configs(device: Dict[str, str], username: str, password: str) -> None
         console.print(f"[red]❌ Error backing up {ip}: {e}[/red]")
 
 
-def backup_commands(device: Dict[str, str], username: str, password: str, commands: List[str]) -> None:
-    """Run and save specific command outputs for a device."""
-    ip, driver_name = device["ip"], device["os"]
+def backup_commands(device: Dict[str, str], commands: List[str]) -> None:
+    ip = device["ip"]
 
+    logging.info(f"Connecting to {ip} for command execution...")
     try:
-        logging.info(f"Connecting to {ip} for command execution...")
-        driver = get_network_driver(driver_name)
-        device_conn = driver(hostname=ip, username=username, password=password)
+        device_conn = connect_to_device(device)
+    except Exception as e:
+        logging.error(f"Failed to back up {ip}: {e}")
+        console.print(f"[red]❌ Error backing up {ip}: {e}[/red]")
+        return
+    try:
         device_conn.open()
 
         facts = device_conn.get_facts()
@@ -205,7 +256,9 @@ def backup_commands(device: Dict[str, str], username: str, password: str, comman
         device_dir = os.path.join(BACKUP_DIR, customer, hostname)
         ensure_dir(device_dir)
 
-        output_filename = os.path.join(device_dir, f"{customer}_{hostname}_{timestamp}.txt")
+        output_filename = os.path.join(
+            device_dir, f"{customer}_{hostname}_{timestamp}.txt"
+        )
 
         with open(output_filename, "w") as f:
             f.write(f"### Command Backup for {hostname} ({ip}) ###\n")
@@ -217,7 +270,9 @@ def backup_commands(device: Dict[str, str], username: str, password: str, comman
                 output = device_conn.cli([cmd])[cmd]
                 f.write(f"$ {cmd}\n{output}\n{'-' * 60}\n\n")
 
-        console.print(f"[cyan]📄 [{hostname}] Command outputs saved to: {output_filename}[/cyan]")
+        console.print(
+            f"[cyan]📄 [{hostname}] Command outputs saved to: {output_filename}[/cyan]"
+        )
 
         device_conn.close()
         logging.info(f"Command backup completed for {hostname}")
@@ -240,8 +295,8 @@ def print_menu() -> None:
     print("MAIN MENU")
     print("-" * 50)
     print("1. Backup configurations")
-    print("2. Backup specific command outputs")
-    print("3. Both (configs + commands)")
+    # print("2. Backup specific command outputs")
+    print("2. Both (configs + commands)")
     print("q. Exit Program")
     print("-" * 50)
 
@@ -259,10 +314,12 @@ def display_inventory_table(devices: List[Dict[str, str]]) -> None:
 def run_backup(username: Optional[str] = None, password: Optional[str] = None) -> None:
     """Main function to handle user menu and backup options."""
     devices = load_inventory()
-    devices = auto_update_inventory(devices, username, password)
+    # devices = auto_update_inventory(devices, username, password)
 
     if not devices:
-        console.print("[yellow]⚠️ No devices found in inventory. Please create an inventory first.[/yellow]")
+        console.print(
+            "[yellow]⚠️ No devices found in inventory. Please create an inventory first.[/yellow]"
+        )
         return
 
     if not username:
@@ -280,25 +337,56 @@ def run_backup(username: Optional[str] = None, password: Optional[str] = None) -
         if choice == "1":
             slow_print("\n🚀 Starting configuration backups...\n")
             for dev in devices:
-                backup_configs(dev, username, password)
-            pause()    
+                if (
+                    not dev.get("ip")
+                    or not dev.get("username")
+                    or not dev.get("password")
+                    or not dev.get("os")
+                ):
+                    console.print(
+                        "[yellow]⚠️ Device entry is not completed, please create or update the inventory first. [/yellow]"
+                    )
+                    continue
+
+                console.print(
+                    f"[green]Starting backup for {dev.get('ip'), ''} - {dev.get('name', '')}[/green]"
+                )
+                backup_configs(dev)
+            pause()
+
+        # elif choice == "2":
+        #     raw_cmds = input(
+        #         "Enter command(s) separated by commas (e.g., 'show version,show interfaces'): "
+        #     ).strip()
+        #     commands = [cmd.strip() for cmd in raw_cmds.split(",") if cmd.strip()]
+        #     slow_print("\n🚀 Starting command backups...\n")
+        #     for dev in devices:
+        #         backup_commands(dev, username, password, commands)
+        #     pause()
 
         elif choice == "2":
-            raw_cmds = input("Enter command(s) separated by commas (e.g., 'show version,show interfaces'): ").strip()
-            commands = [cmd.strip() for cmd in raw_cmds.split(",") if cmd.strip()]
-            slow_print("\n🚀 Starting command backups...\n")
-            for dev in devices:
-                backup_commands(dev, username, password, commands)
-            pause()    
-
-        elif choice == "3":
-            raw_cmds = input("Enter command(s) separated by commas (e.g., 'show version,show interfaces'): ").strip()
+            raw_cmds = input(
+                "Enter command(s) separated by commas (e.g., 'show version,show interfaces'): "
+            ).strip()
             commands = [cmd.strip() for cmd in raw_cmds.split(",") if cmd.strip()]
             slow_print("\n🚀 Starting full backups (config + commands)...\n")
             for dev in devices:
-                backup_commands(dev, username, password, commands)
-                backup_configs(dev, username, password)
-            pause()    
+                if (
+                    not dev.get("ip")
+                    or not dev.get("username")
+                    or not dev.get("password")
+                    or not dev.get("os")
+                ):
+                    console.print(
+                        "[yellow]⚠️ Device entry is not completed, please create or update the inventory first. [/yellow]"
+                    )
+                    continue
+                console.print(
+                    f"[green]Starting backup for {dev.get('ip'), ''} - {dev.get('name', '')}[/green]"
+                )
+                backup_commands(dev, commands)
+                backup_configs(dev)
+            pause()
 
         elif choice == "q":
             slow_print("\nExiting backup system...")
