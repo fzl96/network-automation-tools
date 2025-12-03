@@ -1,0 +1,61 @@
+io@MSI-NB48LM1B:~/satr.io$ python3 snipe_R.py
+
+
+ _________________________________________________________________________________________
+|:..                                                                     ''':::::%%%%%%%%|
+|%%%:::::..                               S N I P E                            ''::::%%%%|
+|%%%%%%%:::::.....____________________________________________________________________:::|
+
+Description   : Automated IOS-XR protocols count in summary to Excel
+Version       : 1.0
+-----------------------------------------------------------------------------------------
+
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+1. Connecting to the Jump host
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Jump Server Prompt: >
+>
+
+**********Connected to the Jump host**********
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+2. Connecting to the Dest Router
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Enter the destination to connect (e.g: 'p-d2-bks', 'me-d6-sbr-4'): p-d2-boo
+telnet p-d2-boo
+Trying 118.98.8.97...
+Connected to p-d2-boo.
+Escape character is '^]'.
+
+
+                            !!!! WARNING !!!!
+             This Node is the property of PT.TELKOM INDONESIA
+                        All actions are monitored
+                    Unauthorized access is prohibited
+                       Violators will be prosecuted
+
+
+username:
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+3. Destination Device Prompt
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Authentication succeeded. Your password will expire in 7 weeks + 6 days  + 16 hours  + 34 Minutes
+Router Prompt: RP/0/RP0/CPU0:P-D2-BOO#
++----------+------------------+------+-----+-----+---------+---------+-----------+-----+
+| Hostname |    Timestamp     | OSPF | LDP | CDP | MPLS-TE | Intf Up | Intf Down | PIM |
++----------+------------------+------+-----+-----+---------+---------+-----------+-----+
+| P-D2-BOO | 03/12/2025/16:45 |  5   |  6  |  26 |    80   |    39   |     88    |  19 |
++----------+------------------+------+-----+-----+---------+---------+-----------+-----+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+4. Saving output to snipe_table.xlsx
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Opened existing Excel file: snipe_table.xlsx.
+Opened existing sheet: 'p-d2-boo'.
+Appended data for P-D2-BOO at 03/12/2025/16:45.
+Data has been saved to snipe_table.xlsx.

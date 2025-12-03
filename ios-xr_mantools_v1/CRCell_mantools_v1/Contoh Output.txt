@@ -1,0 +1,697 @@
+io@MSI-NB48LM1B:~/satr.io$ python3 CRC_Cell_15.py
+
+ ______________________________________________________________________
+|:..                                                   ''':::::%%%%%%%%|
+|%%%:::::..                      C R C E L L                 ''::::%%%%|
+|%%%%%%%:::::.....__________________________________________________:::|
+
+Description   : Automated CRC Error Monitoring with Delta Calculation
+Version       : 1.0
+------------------------------------------------------------------------
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+1. Connecting to the Jump host
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Jump Server Prompt: >
+>
+
+**********Connected to the Jump host**********
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+2. Connecting to the Dest Router
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Enter the destination to connect (e.g: 'p-d2-bks', 'me-d6-sbr-4'): p-d2-boo
+Anda tidak diperbolehkan menggunakan command :
+> Anda tidak diperbolehkan menggunakan command :
+> Anda tidak diperbolehkan menggunakan command :
+> Anda tidak diperbolehkan menggunakan command :
+> telnet p-d2-boo
+Trying 118.98.8.97...
+Connected to p-d2-boo.
+Escape character is '^]'.
+
+
+                            !!!! WARNING !!!!
+             This Node is the property of PT.TELKOM INDONESIA
+                        All actions are monitored
+                    Unauthorized access is prohibited
+                       Violators will be prosecuted
+
+
+username:
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+3. Destination Device Prompt
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Authentication succeeded. Your password will expire in 7 weeks + 6 days  + 16 hours  + 49 Minutes
+Router Prompt: Last switch-over Tue Mar 11 01:20:51 2025: 38 weeks, 1 day, 15 hours, 10 minutes ago
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+5. Sending commands to the router
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Output for command 'term len 0':
+
+Wed Dec  3 16:31:01.112 WIB
+Output for command 'show interfaces hundredGigE * brief | exclude admin-down':
+
+Wed Dec  3 16:31:01.399 WIB
+
+               Intf       Intf        LineP              Encap  MTU        BW
+               Name       State       State               Type (byte)    (Kbps)
+--------------------------------------------------------------------------------
+          Hu0/0/0/0          up          up               ARPA  9192  100000000
+          Hu0/0/0/1          up          up               ARPA  9192  100000000
+          Hu0/0/0/2          up          up               ARPA  9192  100000000
+          Hu0/0/0/3          up          up               ARPA  9192  100000000
+          Hu0/0/0/4          up          up               ARPA  9192  100000000
+          Hu0/0/0/5          up          up               ARPA  9192  100000000
+          Hu0/0/0/6          up          up               ARPA  9192  100000000
+          Hu0/1/0/0          up          up               ARPA  9192  100000000
+          Hu0/1/0/1          up          up               ARPA  9192  100000000
+          Hu0/1/0/2          up          up               ARPA  9192  100000000
+          Hu0/1/0/3          up          up               ARPA  9192  100000000
+          Hu0/1/0/4          up          up               ARPA  9192  100000000
+          Hu0/1/0/5          up          up               ARPA  9192  100000000
+          Hu0/1/0/6          up          up               ARPA  9192  100000000
+          Hu0/1/0/7          up          up               ARPA  9192  100000000
+          Hu0/2/0/4          up          up               ARPA  9192  100000000
+         Hu0/10/0/0          up          up               ARPA  9192  100000000
+         Hu0/10/0/1          up          up               ARPA  9192  100000000
+         Hu0/10/0/2          up          up               ARPA  9192  100000000
+         Hu0/10/0/3          up          up               ARPA  9192  100000000
+         Hu0/10/0/4          up          up               ARPA  9192  100000000
+         Hu0/10/0/5          up          up               ARPA  9192  100000000
+         Hu0/10/0/6          up          up               ARPA  9192  100000000
+         Hu0/10/0/7          up          up               ARPA  9192  100000000
+         Hu0/12/0/0          up          up               ARPA  9192  100000000
+         Hu0/12/0/1          up          up               ARPA  9192  100000000
+         Hu0/12/0/2          up          up               ARPA  9192  100000000
+         Hu0/12/0/3          up          up               ARPA  9192  100000000
+         Hu0/12/0/4          up          up               ARPA  9192  100000000
+         Hu0/12/0/5          up          up               ARPA  9192  100000000
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+5a. Executing commands for all interfaces (Attempt 1)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Executing command: 'show interface Hu0/0/0/0 | include CRC' (Attempt 1)
+Command output (Attempt 1):
+
+Wed Dec  3 16:31:01.743 WIB
+     167421 input errors, 11 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/0/0/1 | include CRC' (Attempt 1)
+Command output (Attempt 1):
+
+Wed Dec  3 16:31:02.073 WIB
+     9498025 input errors, 9159896 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/0/0/2 | include CRC' (Attempt 1)
+Command output (Attempt 1):
+
+Wed Dec  3 16:31:02.443 WIB
+     169997 input errors, 1 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/0/0/3 | include CRC' (Attempt 1)
+Command output (Attempt 1):
+
+Wed Dec  3 16:31:02.810 WIB
+     42098 input errors, 32822 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/0/0/4 | include CRC' (Attempt 1)
+Command output (Attempt 1):
+
+Wed Dec  3 16:31:03.169 WIB
+     100231 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/0/0/5 | include CRC' (Attempt 1)
+Command output (Attempt 1):
+
+Wed Dec  3 16:31:03.486 WIB
+     169220 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/0/0/6 | include CRC' (Attempt 1)
+Command output (Attempt 1):
+
+Wed Dec  3 16:31:03.838 WIB
+     166846 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/1/0/0 | include CRC' (Attempt 1)
+Command output (Attempt 1):
+
+Wed Dec  3 16:31:04.184 WIB
+     184111 input errors, 12385 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/1/0/1 | include CRC' (Attempt 1)
+Command output (Attempt 1):
+
+Wed Dec  3 16:31:04.530 WIB
+     124812 input errors, 15594 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/1/0/2 | include CRC' (Attempt 1)
+Command output (Attempt 1):
+
+Wed Dec  3 16:31:04.886 WIB
+     188583 input errors, 15016 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/1/0/3 | include CRC' (Attempt 1)
+Command output (Attempt 1):
+
+Wed Dec  3 16:31:05.215 WIB
+     167526 input errors, 81 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/1/0/4 | include CRC' (Attempt 1)
+Command output (Attempt 1):
+
+Wed Dec  3 16:31:05.528 WIB
+     167002 input errors, 68 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/1/0/5 | include CRC' (Attempt 1)
+Command output (Attempt 1):
+
+Wed Dec  3 16:31:05.888 WIB
+     212142 input errors, 32116 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/1/0/6 | include CRC' (Attempt 1)
+Command output (Attempt 1):
+
+Wed Dec  3 16:31:06.235 WIB
+     214384 input errors, 32185 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/1/0/7 | include CRC' (Attempt 1)
+Command output (Attempt 1):
+
+Wed Dec  3 16:31:06.683 WIB
+     100480 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/2/0/4 | include CRC' (Attempt 1)
+Command output (Attempt 1):
+
+Wed Dec  3 16:31:07.022 WIB
+     100939 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/10/0/0 | include CRC' (Attempt 1)
+Command output (Attempt 1):
+
+Wed Dec  3 16:31:07.348 WIB
+     170626 input errors, 21 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/10/0/1 | include CRC' (Attempt 1)
+Command output (Attempt 1):
+
+Wed Dec  3 16:31:07.729 WIB
+     182765 input errors, 10272 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/10/0/2 | include CRC' (Attempt 1)
+Command output (Attempt 1):
+
+Wed Dec  3 16:31:08.104 WIB
+     101589 input errors, 876 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/10/0/3 | include CRC' (Attempt 1)
+Command output (Attempt 1):
+
+Wed Dec  3 16:31:08.440 WIB
+     103821 input errors, 64 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/10/0/4 | include CRC' (Attempt 1)
+Command output (Attempt 1):
+
+Wed Dec  3 16:31:08.736 WIB
+     31305 input errors, 24472 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/10/0/5 | include CRC' (Attempt 1)
+Command output (Attempt 1):
+
+Wed Dec  3 16:31:09.103 WIB
+     167792 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/10/0/6 | include CRC' (Attempt 1)
+Command output (Attempt 1):
+
+Wed Dec  3 16:31:09.455 WIB
+     100584 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/10/0/7 | include CRC' (Attempt 1)
+Command output (Attempt 1):
+
+Wed Dec  3 16:31:09.887 WIB
+     100384 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/12/0/0 | include CRC' (Attempt 1)
+Command output (Attempt 1):
+
+Wed Dec  3 16:31:10.268 WIB
+     37758 input errors, 37754 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/12/0/1 | include CRC' (Attempt 1)
+Command output (Attempt 1):
+
+Wed Dec  3 16:31:10.618 WIB
+     32 input errors, 31 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/12/0/2 | include CRC' (Attempt 1)
+Command output (Attempt 1):
+
+Wed Dec  3 16:31:10.974 WIB
+     35 input errors, 35 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/12/0/3 | include CRC' (Attempt 1)
+Command output (Attempt 1):
+
+Wed Dec  3 16:31:11.343 WIB
+     36 input errors, 35 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/12/0/4 | include CRC' (Attempt 1)
+Command output (Attempt 1):
+
+Wed Dec  3 16:31:11.735 WIB
+     0 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/12/0/5 | include CRC' (Attempt 1)
+Command output (Attempt 1):
+
+Wed Dec  3 16:31:12.101 WIB
+     309 input errors, 309 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Waiting 2 second before starting Attempt 2...
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+5b. Executing commands for all interfaces (Attempt 2)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Executing command: 'show interface Hu0/0/0/0 | include CRC' (Attempt 2)
+Command output (Attempt 2):
+
+Wed Dec  3 16:31:14.426 WIB
+     167421 input errors, 11 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/0/0/1 | include CRC' (Attempt 2)
+Command output (Attempt 2):
+
+Wed Dec  3 16:31:14.786 WIB
+     9498025 input errors, 9159896 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/0/0/2 | include CRC' (Attempt 2)
+Command output (Attempt 2):
+
+Wed Dec  3 16:31:15.173 WIB
+     169997 input errors, 1 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/0/0/3 | include CRC' (Attempt 2)
+Command output (Attempt 2):
+
+Wed Dec  3 16:31:15.471 WIB
+     42098 input errors, 32822 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/0/0/4 | include CRC' (Attempt 2)
+Command output (Attempt 2):
+
+Wed Dec  3 16:31:15.798 WIB
+     100231 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/0/0/5 | include CRC' (Attempt 2)
+Command output (Attempt 2):
+
+Wed Dec  3 16:31:16.143 WIB
+     169220 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/0/0/6 | include CRC' (Attempt 2)
+Command output (Attempt 2):
+
+Wed Dec  3 16:31:16.458 WIB
+     166846 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/1/0/0 | include CRC' (Attempt 2)
+Command output (Attempt 2):
+
+Wed Dec  3 16:31:16.802 WIB
+     184111 input errors, 12385 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/1/0/1 | include CRC' (Attempt 2)
+Command output (Attempt 2):
+
+Wed Dec  3 16:31:17.115 WIB
+     124812 input errors, 15594 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/1/0/2 | include CRC' (Attempt 2)
+Command output (Attempt 2):
+
+Wed Dec  3 16:31:17.440 WIB
+     188583 input errors, 15016 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/1/0/3 | include CRC' (Attempt 2)
+Command output (Attempt 2):
+
+Wed Dec  3 16:31:17.799 WIB
+     167526 input errors, 81 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/1/0/4 | include CRC' (Attempt 2)
+Command output (Attempt 2):
+
+Wed Dec  3 16:31:18.136 WIB
+     167002 input errors, 68 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/1/0/5 | include CRC' (Attempt 2)
+Command output (Attempt 2):
+
+Wed Dec  3 16:31:18.517 WIB
+     212142 input errors, 32116 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/1/0/6 | include CRC' (Attempt 2)
+Command output (Attempt 2):
+
+Wed Dec  3 16:31:18.955 WIB
+     214384 input errors, 32185 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/1/0/7 | include CRC' (Attempt 2)
+Command output (Attempt 2):
+
+Wed Dec  3 16:31:19.316 WIB
+     100480 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/2/0/4 | include CRC' (Attempt 2)
+Command output (Attempt 2):
+
+Wed Dec  3 16:31:19.692 WIB
+     100939 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/10/0/0 | include CRC' (Attempt 2)
+Command output (Attempt 2):
+
+Wed Dec  3 16:31:20.076 WIB
+     170626 input errors, 21 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/10/0/1 | include CRC' (Attempt 2)
+Command output (Attempt 2):
+
+Wed Dec  3 16:31:20.465 WIB
+     182765 input errors, 10272 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/10/0/2 | include CRC' (Attempt 2)
+Command output (Attempt 2):
+
+Wed Dec  3 16:31:20.828 WIB
+     101589 input errors, 876 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/10/0/3 | include CRC' (Attempt 2)
+Command output (Attempt 2):
+
+Wed Dec  3 16:31:21.244 WIB
+     103821 input errors, 64 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/10/0/4 | include CRC' (Attempt 2)
+Command output (Attempt 2):
+
+Wed Dec  3 16:31:21.556 WIB
+     31305 input errors, 24472 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/10/0/5 | include CRC' (Attempt 2)
+Command output (Attempt 2):
+
+Wed Dec  3 16:31:21.872 WIB
+     167792 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/10/0/6 | include CRC' (Attempt 2)
+Command output (Attempt 2):
+
+Wed Dec  3 16:31:22.256 WIB
+     100584 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/10/0/7 | include CRC' (Attempt 2)
+Command output (Attempt 2):
+
+Wed Dec  3 16:31:22.679 WIB
+     100384 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/12/0/0 | include CRC' (Attempt 2)
+Command output (Attempt 2):
+
+Wed Dec  3 16:31:23.010 WIB
+     37758 input errors, 37754 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/12/0/1 | include CRC' (Attempt 2)
+Command output (Attempt 2):
+
+Wed Dec  3 16:31:23.313 WIB
+     32 input errors, 31 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/12/0/2 | include CRC' (Attempt 2)
+Command output (Attempt 2):
+
+Wed Dec  3 16:31:23.732 WIB
+     35 input errors, 35 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/12/0/3 | include CRC' (Attempt 2)
+Command output (Attempt 2):
+
+Wed Dec  3 16:31:24.095 WIB
+     36 input errors, 35 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/12/0/4 | include CRC' (Attempt 2)
+Command output (Attempt 2):
+
+Wed Dec  3 16:31:24.467 WIB
+     0 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/12/0/5 | include CRC' (Attempt 2)
+Command output (Attempt 2):
+
+Wed Dec  3 16:31:24.847 WIB
+     309 input errors, 309 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Waiting 2 seconds before starting Attempt 3...
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+5c. Executing commands for all interfaces (Attempt 3)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Executing command: 'show interface Hu0/0/0/0 | include CRC' (Attempt 3)
+Command output (Attempt 3):
+
+Wed Dec  3 16:31:27.185 WIB
+     167421 input errors, 11 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/0/0/1 | include CRC' (Attempt 3)
+Command output (Attempt 3):
+
+Wed Dec  3 16:31:27.505 WIB
+     9498026 input errors, 9159897 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/0/0/2 | include CRC' (Attempt 3)
+Command output (Attempt 3):
+
+Wed Dec  3 16:31:27.818 WIB
+     169997 input errors, 1 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/0/0/3 | include CRC' (Attempt 3)
+Command output (Attempt 3):
+
+Wed Dec  3 16:31:28.207 WIB
+     42098 input errors, 32822 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/0/0/4 | include CRC' (Attempt 3)
+Command output (Attempt 3):
+
+Wed Dec  3 16:31:28.575 WIB
+     100231 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/0/0/5 | include CRC' (Attempt 3)
+Command output (Attempt 3):
+
+Wed Dec  3 16:31:28.957 WIB
+     169220 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/0/0/6 | include CRC' (Attempt 3)
+Command output (Attempt 3):
+
+Wed Dec  3 16:31:29.331 WIB
+     166846 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/1/0/0 | include CRC' (Attempt 3)
+Command output (Attempt 3):
+
+Wed Dec  3 16:31:29.649 WIB
+     184111 input errors, 12385 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/1/0/1 | include CRC' (Attempt 3)
+Command output (Attempt 3):
+
+Wed Dec  3 16:31:29.973 WIB
+     124812 input errors, 15594 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/1/0/2 | include CRC' (Attempt 3)
+Command output (Attempt 3):
+
+Wed Dec  3 16:31:30.306 WIB
+     188583 input errors, 15016 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/1/0/3 | include CRC' (Attempt 3)
+Command output (Attempt 3):
+
+Wed Dec  3 16:31:30.756 WIB
+     167526 input errors, 81 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/1/0/4 | include CRC' (Attempt 3)
+Command output (Attempt 3):
+
+Wed Dec  3 16:31:31.072 WIB
+     167002 input errors, 68 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/1/0/5 | include CRC' (Attempt 3)
+Command output (Attempt 3):
+
+Wed Dec  3 16:31:31.426 WIB
+     212142 input errors, 32116 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/1/0/6 | include CRC' (Attempt 3)
+Command output (Attempt 3):
+
+Wed Dec  3 16:31:31.739 WIB
+     214384 input errors, 32185 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/1/0/7 | include CRC' (Attempt 3)
+Command output (Attempt 3):
+
+Wed Dec  3 16:31:32.102 WIB
+     100480 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/2/0/4 | include CRC' (Attempt 3)
+Command output (Attempt 3):
+
+Wed Dec  3 16:31:32.471 WIB
+     100939 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/10/0/0 | include CRC' (Attempt 3)
+Command output (Attempt 3):
+
+Wed Dec  3 16:31:32.813 WIB
+     170626 input errors, 21 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/10/0/1 | include CRC' (Attempt 3)
+Command output (Attempt 3):
+
+Wed Dec  3 16:31:33.191 WIB
+     182765 input errors, 10272 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/10/0/2 | include CRC' (Attempt 3)
+Command output (Attempt 3):
+
+Wed Dec  3 16:31:33.522 WIB
+     101589 input errors, 876 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/10/0/3 | include CRC' (Attempt 3)
+Command output (Attempt 3):
+
+Wed Dec  3 16:31:33.846 WIB
+     103821 input errors, 64 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/10/0/4 | include CRC' (Attempt 3)
+Command output (Attempt 3):
+
+Wed Dec  3 16:31:34.196 WIB
+     31305 input errors, 24472 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/10/0/5 | include CRC' (Attempt 3)
+Command output (Attempt 3):
+
+Wed Dec  3 16:31:34.594 WIB
+     167792 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/10/0/6 | include CRC' (Attempt 3)
+Command output (Attempt 3):
+
+Wed Dec  3 16:31:34.974 WIB
+     100584 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/10/0/7 | include CRC' (Attempt 3)
+Command output (Attempt 3):
+
+Wed Dec  3 16:31:35.326 WIB
+     100384 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/12/0/0 | include CRC' (Attempt 3)
+Command output (Attempt 3):
+
+Wed Dec  3 16:31:35.710 WIB
+     37758 input errors, 37754 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/12/0/1 | include CRC' (Attempt 3)
+Command output (Attempt 3):
+
+Wed Dec  3 16:31:36.037 WIB
+     32 input errors, 31 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/12/0/2 | include CRC' (Attempt 3)
+Command output (Attempt 3):
+
+Wed Dec  3 16:31:36.434 WIB
+     35 input errors, 35 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/12/0/3 | include CRC' (Attempt 3)
+Command output (Attempt 3):
+
+Wed Dec  3 16:31:36.789 WIB
+     36 input errors, 35 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/12/0/4 | include CRC' (Attempt 3)
+Command output (Attempt 3):
+
+Wed Dec  3 16:31:37.153 WIB
+     0 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+Executing command: 'show interface Hu0/12/0/5 | include CRC' (Attempt 3)
+Command output (Attempt 3):
+
+Wed Dec  3 16:31:37.520 WIB
+     309 input errors, 309 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+6. Processing Data and Generating Table
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
++------------+------------------------------+--------------------+-----------+---------------------+
+| Interface  |          Timestamp           | Delta Input Errors | Delta CRC | Delta Output Errors |
++------------+------------------------------+--------------------+-----------+---------------------+
+| Hu0/0/0/0  | Wed 03-Dec-2025 16:31:37 WIB |         0          |     0     |          0          |
+| Hu0/0/0/1  | Wed 03-Dec-2025 16:31:37 WIB |         1          |     1     |          0          |
+| Hu0/0/0/2  | Wed 03-Dec-2025 16:31:37 WIB |         0          |     0     |          0          |
+| Hu0/0/0/3  | Wed 03-Dec-2025 16:31:37 WIB |         0          |     0     |          0          |
+| Hu0/0/0/4  | Wed 03-Dec-2025 16:31:37 WIB |         0          |     0     |          0          |
+| Hu0/0/0/5  | Wed 03-Dec-2025 16:31:37 WIB |         0          |     0     |          0          |
+| Hu0/0/0/6  | Wed 03-Dec-2025 16:31:37 WIB |         0          |     0     |          0          |
+| Hu0/1/0/0  | Wed 03-Dec-2025 16:31:37 WIB |         0          |     0     |          0          |
+| Hu0/1/0/1  | Wed 03-Dec-2025 16:31:37 WIB |         0          |     0     |          0          |
+| Hu0/1/0/2  | Wed 03-Dec-2025 16:31:37 WIB |         0          |     0     |          0          |
+| Hu0/1/0/3  | Wed 03-Dec-2025 16:31:37 WIB |         0          |     0     |          0          |
+| Hu0/1/0/4  | Wed 03-Dec-2025 16:31:37 WIB |         0          |     0     |          0          |
+| Hu0/1/0/5  | Wed 03-Dec-2025 16:31:37 WIB |         0          |     0     |          0          |
+| Hu0/1/0/6  | Wed 03-Dec-2025 16:31:37 WIB |         0          |     0     |          0          |
+| Hu0/1/0/7  | Wed 03-Dec-2025 16:31:37 WIB |         0          |     0     |          0          |
+| Hu0/2/0/4  | Wed 03-Dec-2025 16:31:37 WIB |         0          |     0     |          0          |
+| Hu0/10/0/0 | Wed 03-Dec-2025 16:31:37 WIB |         0          |     0     |          0          |
+| Hu0/10/0/1 | Wed 03-Dec-2025 16:31:37 WIB |         0          |     0     |          0          |
+| Hu0/10/0/2 | Wed 03-Dec-2025 16:31:37 WIB |         0          |     0     |          0          |
+| Hu0/10/0/3 | Wed 03-Dec-2025 16:31:37 WIB |         0          |     0     |          0          |
+| Hu0/10/0/4 | Wed 03-Dec-2025 16:31:37 WIB |         0          |     0     |          0          |
+| Hu0/10/0/5 | Wed 03-Dec-2025 16:31:37 WIB |         0          |     0     |          0          |
+| Hu0/10/0/6 | Wed 03-Dec-2025 16:31:37 WIB |         0          |     0     |          0          |
+| Hu0/10/0/7 | Wed 03-Dec-2025 16:31:37 WIB |         0          |     0     |          0          |
+| Hu0/12/0/0 | Wed 03-Dec-2025 16:31:37 WIB |         0          |     0     |          0          |
+| Hu0/12/0/1 | Wed 03-Dec-2025 16:31:37 WIB |         0          |     0     |          0          |
+| Hu0/12/0/2 | Wed 03-Dec-2025 16:31:37 WIB |         0          |     0     |          0          |
+| Hu0/12/0/3 | Wed 03-Dec-2025 16:31:37 WIB |         0          |     0     |          0          |
+| Hu0/12/0/4 | Wed 03-Dec-2025 16:31:37 WIB |         0          |     0     |          0          |
+| Hu0/12/0/5 | Wed 03-Dec-2025 16:31:37 WIB |         0          |     0     |          0          |
++------------+------------------------------+--------------------+-----------+---------------------+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+7. Writing output to file
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Data saved to text file: CRC_DELTA_03-Dec-2025_16-31-37_WIB.txt
+Applying conditional formatting to sheet 'p-d2-boo'...
+Data saved and formatted in Excel file: CRC_DELTA_SUMMARY.xlsx on sheet 'p-d2-boo'
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+8. Disconnecting from device
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

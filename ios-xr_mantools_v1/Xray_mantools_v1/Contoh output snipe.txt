@@ -1,0 +1,343 @@
+io@MSI-NB48LM1B:~/satr.io$ python3 xray_8.py
+
+
+ _________________________________________________________________________________________
+|:..                                                                     ''':::::%%%%%%%%|
+|%%%:::::..                               X R A Y                              ''::::%%%%|
+|%%%%%%%:::::.....____________________________________________________________________:::|
+
+Description   : Automated IOS-XR dBm optic 100G interface monitoring with Excel reporting
+Version       : 1.0
+-----------------------------------------------------------------------------------------
+
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+1. Connecting to the Jump host
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Jump Server Prompt: >
+>
+
+**********Connected to the Jump host**********
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+2. Connecting to the Dest Router
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Enter the destination to connect (e.g: 'p-d2-bks', 'me-d6-sbr-4'): p-d2-boo
+Anda tidak diperbolehkan menggunakan command :
+> Anda tidak diperbolehkan menggunakan command :
+> telnet p-d2-boo
+Trying 118.98.8.97...
+Connected to p-d2-boo.
+Escape character is '^]'.
+
+
+                            !!!! WARNING !!!!
+             This Node is the property of PT.TELKOM INDONESIA
+                        All actions are monitored
+                    Unauthorized access is prohibited
+                       Violators will be prosecuted
+
+
+username:
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+3. Destination Device Prompt
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Authentication succeeded. Your password will expire in 7 weeks + 6 days  + 16 hours  + 47 Minutes
+Router Prompt: Last switch-over Tue Mar 11 01:20:51 2025: 38 weeks, 1 day, 15 hours, 12 minutes ago
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+4. Sending command to the router
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Output for command 'show interfaces hundredGigE * brief | exclude down':
+
+Wed Dec  3 16:33:00.235 WIB
+
+               Intf       Intf        LineP              Encap  MTU        BW
+               Name       State       State               Type (byte)    (Kbps)
+--------------------------------------------------------------------------------
+          Hu0/0/0/0          up          up               ARPA  9192  100000000
+          Hu0/0/0/1          up          up               ARPA  9192  100000000
+          Hu0/0/0/2          up          up               ARPA  9192  100000000
+          Hu0/0/0/3          up          up               ARPA  9192  100000000
+          Hu0/0/0/4          up          up               ARPA  9192  100000000
+          Hu0/0/0/5          up          up               ARPA  9192  100000000
+          Hu0/0/0/6          up          up               ARPA  9192  100000000
+          Hu0/1/0/0          up          up               ARPA  9192  100000000
+          Hu0/1/0/1          up          up               ARPA  9192  100000000
+          Hu0/1/0/2          up          up               ARPA  9192  100000000
+          Hu0/1/0/3          up          up               ARPA  9192  100000000
+          Hu0/1/0/4          up          up               ARPA  9192  100000000
+          Hu0/1/0/5          up          up               ARPA  9192  100000000
+          Hu0/1/0/6          up          up               ARPA  9192  100000000
+          Hu0/1/0/7          up          up               ARPA  9192  100000000
+          Hu0/2/0/4          up          up               ARPA  9192  100000000
+         Hu0/10/0/0          up          up               ARPA  9192  100000000
+         Hu0/10/0/1          up          up               ARPA  9192  100000000
+         Hu0/10/0/2          up          up               ARPA  9192  100000000
+         Hu0/10/0/3          up          up               ARPA  9192  100000000
+         Hu0/10/0/4          up          up               ARPA  9192  100000000
+         Hu0/10/0/5          up          up               ARPA  9192  100000000
+         Hu0/10/0/6          up          up               ARPA  9192  100000000
+         Hu0/10/0/7          up          up               ARPA  9192  100000000
+         Hu0/12/0/0          up          up               ARPA  9192  100000000
+         Hu0/12/0/1          up          up               ARPA  9192  100000000
+         Hu0/12/0/2          up          up               ARPA  9192  100000000
+         Hu0/12/0/3          up          up               ARPA  9192  100000000
+         Hu0/12/0/4          up          up               ARPA  9192  100000000
+         Hu0/12/0/5          up          up               ARPA  9192  100000000
+
+Output for command 'show controllers Hu0/0/0/0 phy | in dB | in Amp':
+
+Wed Dec  3 16:33:00.592 WIB
+                   0       +54.683 C     62.738 mAmps   0.67280 mW (-1.72114 dBm)   1.57240 mW (1.96563 dBm)
+                   1       +54.683 C     57.620 mAmps   0.66300 mW (-1.78486 dBm)   1.19110 mW (0.75948 dBm)
+                   2       +54.683 C     60.552 mAmps   0.66160 mW (-1.79405 dBm)   1.72430 mW (2.36613 dBm)
+                   3       +54.683 C     64.126 mAmps   0.67080 mW (-1.73407 dBm)   1.50770 mW (1.78315 dBm)
+
+Output for command 'show controllers Hu0/0/0/1 phy | in dB | in Amp':
+
+Wed Dec  3 16:33:01.067 WIB
+                   0       +45.632 C     51.070 mAmps   0.71220 mW (-1.47398 dBm)   0.86370 mW (-0.63637 dBm)
+                   1       +45.632 C     50.984 mAmps   0.70500 mW (-1.51811 dBm)   0.83120 mW (-0.80294 dBm)
+                   2       +45.632 C     58.242 mAmps   0.70660 mW (-1.50826 dBm)   0.88800 mW (-0.51587 dBm)
+                   3       +45.632 C     59.044 mAmps   0.70190 mW (-1.53725 dBm)   0.83140 mW (-0.80190 dBm)
+
+Output for command 'show controllers Hu0/0/0/2 phy | in dB | in Amp':
+
+Wed Dec  3 16:33:01.539 WIB
+                   0       +45.632 C     46.284 mAmps   0.68130 mW (-1.66662 dBm)   1.27090 mW (1.04111 dBm)
+                   1       +45.632 C     47.918 mAmps   0.67130 mW (-1.73083 dBm)   0.97470 mW (-0.11129 dBm)
+                   2       +45.632 C     51.786 mAmps   0.68140 mW (-1.66598 dBm)   0.99050 mW (-0.04146 dBm)
+                   3       +45.632 C     54.586 mAmps   0.70130 mW (-1.54096 dBm)   0.99580 mW (-0.01828 dBm)
+
+Output for command 'show controllers Hu0/0/0/3 phy | in dB | in Amp':
+
+Wed Dec  3 16:33:01.976 WIB
+                   0       +45.820 C     43.334 mAmps   0.72150 mW (-1.41764 dBm)   1.04470 mW (0.18992 dBm)
+                   1       +45.820 C     48.446 mAmps   0.74470 mW (-1.28019 dBm)   1.02200 mW (0.09451 dBm)
+                   2       +45.820 C     50.860 mAmps   0.73900 mW (-1.31356 dBm)   0.91350 mW (-0.39291 dBm)
+                   3       +45.820 C     59.346 mAmps   0.71140 mW (-1.47886 dBm)   0.94430 mW (-0.24890 dBm)
+
+Output for command 'show controllers Hu0/0/0/4 phy | in dB | in Amp':
+
+Wed Dec  3 16:33:02.494 WIB
+                   0       +55.835 C     53.496 mAmps   0.70250 mW (-1.53354 dBm)   1.40810 mW (1.48633 dBm)
+                   1       +55.835 C     51.094 mAmps   0.70850 mW (-1.49660 dBm)   1.19510 mW (0.77404 dBm)
+                   2       +55.835 C     60.098 mAmps   0.71290 mW (-1.46971 dBm)   1.17770 mW (0.71035 dBm)
+                   3       +55.835 C     55.344 mAmps   0.69740 mW (-1.56518 dBm)   1.18670 mW (0.74341 dBm)
+
+Output for command 'show controllers Hu0/0/0/5 phy | in dB | in Amp':
+
+Wed Dec  3 16:33:02.935 WIB
+                   0       +45.632 C     44.580 mAmps   0.70490 mW (-1.51872 dBm)   1.71670 mW (2.34694 dBm)
+                   1       +45.632 C     43.236 mAmps   0.70430 mW (-1.52242 dBm)   1.82570 mW (2.61429 dBm)
+                   2       +45.632 C     44.006 mAmps   0.70970 mW (-1.48925 dBm)   1.68240 mW (2.25929 dBm)
+                   3       +45.632 C     44.524 mAmps   0.66140 mW (-1.79536 dBm)   1.62040 mW (2.09622 dBm)
+
+Output for command 'show controllers Hu0/0/0/6 phy | in dB | in Amp':
+
+Wed Dec  3 16:33:03.451 WIB
+                   0       +45.820 C     46.646 mAmps   0.70030 mW (-1.54716 dBm)   1.25120 mW (0.97327 dBm)
+                   1       +45.820 C     50.226 mAmps   0.70320 mW (-1.52921 dBm)   1.30490 mW (1.15577 dBm)
+                   2       +45.820 C     48.170 mAmps   0.71080 mW (-1.48253 dBm)   1.49120 mW (1.73536 dBm)
+                   3       +45.820 C     54.982 mAmps   0.70550 mW (-1.51503 dBm)   1.24090 mW (0.93737 dBm)
+
+Output for command 'show controllers Hu0/1/0/0 phy | in dB | in Amp':
+
+Wed Dec  3 16:33:03.897 WIB
+                   0             N/A     40.144 mAmps   1.51570 mW (1.80613 dBm)   0.55420 mW (-2.56333 dBm)
+                   1             N/A     41.146 mAmps   1.69010 mW (2.27912 dBm)   0.52270 mW (-2.81747 dBm)
+                   2             N/A     39.664 mAmps   1.52500 mW (1.83270 dBm)   0.87320 mW (-0.58886 dBm)
+                   3             N/A     40.746 mAmps   1.75990 mW (2.45488 dBm)   0.56840 mW (-2.45346 dBm)
+
+Output for command 'show controllers Hu0/1/0/1 phy | in dB | in Amp':
+
+Wed Dec  3 16:33:04.355 WIB
+                   0             N/A     41.370 mAmps   1.46020 mW (1.64412 dBm)   0.91280 mW (-0.39624 dBm)
+                   1             N/A     40.662 mAmps   1.64420 mW (2.15955 dBm)   0.94920 mW (-0.22642 dBm)
+                   2             N/A     40.738 mAmps   1.46530 mW (1.65927 dBm)   0.89510 mW (-0.48128 dBm)
+                   3             N/A     41.074 mAmps   1.67960 mW (2.25206 dBm)   0.84040 mW (-0.75514 dBm)
+
+Output for command 'show controllers Hu0/1/0/2 phy | in dB | in Amp':
+
+Wed Dec  3 16:33:04.802 WIB
+                   0             N/A     40.330 mAmps   1.56460 mW (1.94403 dBm)   0.98590 mW (-0.06167 dBm)
+                   1             N/A     40.484 mAmps   1.93520 mW (2.86726 dBm)   0.76470 mW (-1.16509 dBm)
+                   2             N/A     40.366 mAmps   1.32790 mW (1.23165 dBm)   0.75310 mW (-1.23147 dBm)
+                   3             N/A     40.740 mAmps   1.54970 mW (1.90248 dBm)   1.09800 mW (0.40602 dBm)
+
+Output for command 'show controllers Hu0/1/0/3 phy | in dB | in Amp':
+
+Wed Dec  3 16:33:05.282 WIB
+                   0             N/A     40.502 mAmps   1.26050 mW (1.00543 dBm)   1.27370 mW (1.05067 dBm)
+                   1             N/A     41.222 mAmps   1.50610 mW (1.77854 dBm)   1.34230 mW (1.27850 dBm)
+                   2             N/A     41.070 mAmps   1.53020 mW (1.84748 dBm)   1.26500 mW (1.02091 dBm)
+                   3             N/A     41.136 mAmps   1.69640 mW (2.29528 dBm)   1.03100 mW (0.13259 dBm)
+
+Output for command 'show controllers Hu0/1/0/4 phy | in dB | in Amp':
+
+Wed Dec  3 16:33:05.726 WIB
+                   0       +45.632 C     45.212 mAmps   0.69660 mW (-1.57017 dBm)   1.03510 mW (0.14982 dBm)
+                   1       +45.632 C     44.496 mAmps   0.70140 mW (-1.54034 dBm)   1.18840 mW (0.74963 dBm)
+                   2       +45.632 C     45.404 mAmps   0.66750 mW (-1.75549 dBm)   1.17470 mW (0.69927 dBm)
+                   3       +45.632 C     43.066 mAmps   0.68630 mW (-1.63486 dBm)   1.36230 mW (1.34273 dBm)
+
+Output for command 'show controllers Hu0/1/0/5 phy | in dB | in Amp':
+
+Wed Dec  3 16:33:06.232 WIB
+                   0       +48.703 C     47.734 mAmps   0.68690 mW (-1.63106 dBm)   1.07780 mW (0.32538 dBm)
+                   1       +48.703 C     50.064 mAmps   0.69730 mW (-1.56580 dBm)   1.17810 mW (0.71182 dBm)
+                   2       +48.703 C     47.896 mAmps   0.69070 mW (-1.60711 dBm)   1.12150 mW (0.49799 dBm)
+                   3       +48.703 C     51.138 mAmps   0.69640 mW (-1.57141 dBm)   1.05780 mW (0.24404 dBm)
+
+Output for command 'show controllers Hu0/1/0/6 phy | in dB | in Amp':
+
+Wed Dec  3 16:33:06.825 WIB
+                   0       +45.632 C     46.572 mAmps   0.70980 mW (-1.48864 dBm)   0.84940 mW (-0.70888 dBm)
+                   1       +45.632 C     47.620 mAmps   0.70920 mW (-1.49231 dBm)   0.82850 mW (-0.81707 dBm)
+                   2       +45.632 C     50.528 mAmps   0.70970 mW (-1.48925 dBm)   0.91810 mW (-0.37110 dBm)
+                   3       +45.632 C     52.132 mAmps   0.70270 mW (-1.53230 dBm)   0.89400 mW (-0.48662 dBm)
+
+Output for command 'show controllers Hu0/1/0/7 phy | in dB | in Amp':
+
+Wed Dec  3 16:33:07.417 WIB
+                   0             N/A     41.246 mAmps   1.48260 mW (1.71024 dBm)   1.28640 mW (1.09376 dBm)
+                   1             N/A     40.782 mAmps   1.79640 mW (2.54403 dBm)   1.20590 mW (0.81311 dBm)
+                   2             N/A     40.830 mAmps   1.45730 mW (1.63549 dBm)   1.38950 mW (1.42859 dBm)
+                   3             N/A     40.300 mAmps   1.42070 mW (1.52502 dBm)   1.48230 mW (1.70936 dBm)
+
+Output for command 'show controllers Hu0/2/0/4 phy | in dB | in Amp':
+
+Wed Dec  3 16:33:07.894 WIB
+                   0             N/A     41.324 mAmps   1.40130 mW (1.46531 dBm)   1.81020 mW (2.57727 dBm)
+                   1             N/A     40.544 mAmps   1.51840 mW (1.81386 dBm)   1.17810 mW (0.71182 dBm)
+                   2             N/A     39.844 mAmps   1.29760 mW (1.13141 dBm)   1.47930 mW (1.70056 dBm)
+                   3             N/A     40.474 mAmps   1.49360 mW (1.74234 dBm)   1.50480 mW (1.77479 dBm)
+
+Output for command 'show controllers Hu0/10/0/0 phy | in dB | in Amp':
+
+Wed Dec  3 16:33:08.421 WIB
+                   0       +45.757 C     55.306 mAmps   0.71490 mW (-1.45755 dBm)   0.79490 mW (-0.99688 dBm)
+                   1       +45.757 C     57.276 mAmps   0.72260 mW (-1.41102 dBm)   1.00400 mW (0.01734 dBm)
+                   2       +45.757 C     54.902 mAmps   0.68230 mW (-1.66025 dBm)   0.91270 mW (-0.39672 dBm)
+                   3       +45.757 C     64.134 mAmps   0.66950 mW (-1.74249 dBm)   0.93070 mW (-0.31190 dBm)
+
+Output for command 'show controllers Hu0/10/0/1 phy | in dB | in Amp':
+
+Wed Dec  3 16:33:08.925 WIB
+                   0       +45.820 C     45.184 mAmps   0.69040 mW (-1.60899 dBm)   1.66190 mW (2.20605 dBm)
+                   1       +45.820 C     48.526 mAmps   0.68490 mW (-1.64373 dBm)   1.72880 mW (2.37745 dBm)
+                   2       +45.820 C     47.526 mAmps   0.67500 mW (-1.70696 dBm)   1.59240 mW (2.02052 dBm)
+                   3       +45.820 C     52.436 mAmps   0.66700 mW (-1.75874 dBm)   1.77450 mW (2.49076 dBm)
+
+Output for command 'show controllers Hu0/10/0/2 phy | in dB | in Amp':
+
+Wed Dec  3 16:33:09.383 WIB
+                   0       +47.339 C     47.916 mAmps   0.69800 mW (-1.56145 dBm)   1.14750 mW (0.59753 dBm)
+                   1       +47.339 C     54.704 mAmps   0.68560 mW (-1.63929 dBm)   1.05980 mW (0.25224 dBm)
+                   2       +47.339 C     52.706 mAmps   0.68410 mW (-1.64880 dBm)   1.03340 mW (0.14268 dBm)
+                   3       +47.339 C     51.960 mAmps   0.69100 mW (-1.60522 dBm)   1.12990 mW (0.53040 dBm)
+
+Output for command 'show controllers Hu0/10/0/3 phy | in dB | in Amp':
+
+Wed Dec  3 16:33:09.925 WIB
+                   0       +45.820 C     55.788 mAmps   0.69910 mW (-1.55461 dBm)   1.50460 mW (1.77421 dBm)
+                   1       +45.820 C     60.312 mAmps   0.69380 mW (-1.58766 dBm)   1.33540 mW (1.25611 dBm)
+                   2       +45.820 C     58.660 mAmps   0.56310 mW (-2.49414 dBm)   1.53160 mW (1.85145 dBm)
+                   3       +45.820 C     66.144 mAmps   0.67270 mW (-1.72179 dBm)   1.54620 mW (1.89266 dBm)
+
+Output for command 'show controllers Hu0/10/0/4 phy | in dB | in Amp':
+
+Wed Dec  3 16:33:10.438 WIB
+                   0       +46.449 C     47.864 mAmps   0.67010 mW (-1.73860 dBm)   1.40020 mW (1.46190 dBm)
+                   1       +46.449 C     49.030 mAmps   0.68070 mW (-1.67044 dBm)   1.29590 mW (1.12571 dBm)
+                   2       +46.449 C     46.610 mAmps   0.68080 mW (-1.66980 dBm)   1.08190 mW (0.34187 dBm)
+                   3       +46.449 C     54.356 mAmps   0.69180 mW (-1.60019 dBm)   1.29550 mW (1.12437 dBm)
+
+Output for command 'show controllers Hu0/10/0/5 phy | in dB | in Amp':
+
+Wed Dec  3 16:33:11.084 WIB
+                   0       +45.820 C     51.516 mAmps   0.63810 mW (-1.95111 dBm)   1.48950 mW (1.73041 dBm)
+                   1       +45.820 C     58.220 mAmps   0.70780 mW (-1.50089 dBm)   1.28190 mW (1.07854 dBm)
+                   2       +45.820 C     61.576 mAmps   0.70910 mW (-1.49293 dBm)   1.53750 mW (1.86815 dBm)
+                   3       +45.820 C     64.284 mAmps   0.69280 mW (-1.59392 dBm)   1.64100 mW (2.15109 dBm)
+
+Output for command 'show controllers Hu0/10/0/6 phy | in dB | in Amp':
+
+Wed Dec  3 16:33:11.625 WIB
+                   0       +45.820 C     47.398 mAmps   0.73090 mW (-1.36142 dBm)   0.55770 mW (-2.53599 dBm)
+                   1       +45.820 C     52.458 mAmps   0.72090 mW (-1.42125 dBm)   0.82640 mW (-0.82810 dBm)
+                   2       +45.820 C     47.258 mAmps   0.71510 mW (-1.45633 dBm)   0.61550 mW (-2.10772 dBm)
+                   3       +45.820 C     52.768 mAmps   0.73420 mW (-1.34186 dBm)   0.69200 mW (-1.59894 dBm)
+
+Output for command 'show controllers Hu0/10/0/7 phy | in dB | in Amp':
+
+Wed Dec  3 16:33:12.088 WIB
+                   0             N/A     40.318 mAmps   1.58720 mW (2.00632 dBm)   0.68060 mW (-1.67108 dBm)
+                   1             N/A     40.324 mAmps   2.14700 mW (3.31832 dBm)   0.68080 mW (-1.66980 dBm)
+                   2             N/A     40.780 mAmps   1.72940 mW (2.37895 dBm)   0.59200 mW (-2.27678 dBm)
+                   3             N/A     40.206 mAmps   1.88360 mW (2.74989 dBm)   0.61850 mW (-2.08660 dBm)
+
+Output for command 'show controllers Hu0/12/0/0 phy | in dB | in Amp':
+
+Wed Dec  3 16:33:12.550 WIB
+                         0             N/A    36.666 mAmps   1.58070 mW (1.98849 dBm)   0.94760 mW (-0.23375 dBm)
+                         1             N/A    40.986 mAmps   1.44670 mW (1.60378 dBm)   0.81510 mW (-0.88789 dBm)
+                         2             N/A    39.906 mAmps   1.70950 mW (2.32869 dBm)   1.13520 mW (0.55072 dBm)
+                         3             N/A    37.746 mAmps   1.23810 mW (0.92756 dBm)   1.06720 mW (0.28246 dBm)
+
+Output for command 'show controllers Hu0/12/0/1 phy | in dB | in Amp':
+
+Wed Dec  3 16:33:13.187 WIB
+                         0             N/A    41.996 mAmps   1.46910 mW (1.67051 dBm)   1.18560 mW (0.73938 dBm)
+                         1             N/A    42.806 mAmps   1.68060 mW (2.25464 dBm)   1.10370 mW (0.42851 dBm)
+                         2             N/A    41.186 mAmps   1.70720 mW (2.32284 dBm)   1.09620 mW (0.39890 dBm)
+                         3             N/A    45.236 mAmps   1.48300 mW (1.71141 dBm)   1.27610 mW (1.05885 dBm)
+
+Output for command 'show controllers Hu0/12/0/2 phy | in dB | in Amp':
+
+Wed Dec  3 16:33:13.825 WIB
+                         0             N/A    40.986 mAmps   1.37180 mW (1.37291 dBm)   1.50110 mW (1.76410 dBm)
+                         1             N/A    40.986 mAmps   1.42290 mW (1.53174 dBm)   1.22740 mW (0.88986 dBm)
+                         2             N/A    40.986 mAmps   1.10400 mW (0.42969 dBm)   1.15120 mW (0.61151 dBm)
+                         3             N/A    40.986 mAmps   1.08590 mW (0.35790 dBm)   1.09700 mW (0.40207 dBm)
+
+Output for command 'show controllers Hu0/12/0/3 phy | in dB | in Amp':
+
+Wed Dec  3 16:33:14.505 WIB
+                         0             N/A    40.986 mAmps   1.32320 mW (1.21625 dBm)   1.18710 mW (0.74487 dBm)
+                         1             N/A    40.986 mAmps   1.63560 mW (2.13677 dBm)   1.23100 mW (0.90258 dBm)
+                         2             N/A    39.906 mAmps   1.64000 mW (2.14844 dBm)   1.04170 mW (0.17743 dBm)
+                         3             N/A    40.986 mAmps   1.53670 mW (1.86589 dBm)   0.99540 mW (-0.02002 dBm)
+
+Output for command 'show controllers Hu0/12/0/4 phy | in dB | in Amp':
+
+Wed Dec  3 16:33:15.730 WIB
+                         0             N/A    44.426 mAmps   1.62620 mW (2.11174 dBm)   1.16230 mW (0.65318 dBm)
+                         1             N/A    45.236 mAmps   2.03450 mW (3.08458 dBm)   1.20570 mW (0.81239 dBm)
+                         2             N/A    45.236 mAmps   1.70140 mW (2.30806 dBm)   1.10810 mW (0.44579 dBm)
+                         3             N/A    45.236 mAmps   1.73390 mW (2.39024 dBm)   1.10820 mW (0.44618 dBm)
+
+Output for command 'show controllers Hu0/12/0/5 phy | in dB | in Amp':
+
+Wed Dec  3 16:33:16.347 WIB
+                         0             N/A    37.746 mAmps   1.27960 mW (1.07074 dBm)   0.98850 mW (-0.05023 dBm)
+                         1             N/A    38.826 mAmps   1.72460 mW (2.36688 dBm)   1.00670 mW (0.02900 dBm)
+                         2             N/A    40.986 mAmps   1.59490 mW (2.02733 dBm)   1.02640 mW (0.11317 dBm)
+                         3             N/A    38.826 mAmps   1.42860 mW (1.54911 dBm)   1.14240 mW (0.57818 dBm)
+
+Successfully saved to txrx_p-d2-boo_03-12-2025_16-33-16.txt.
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+7. Writing output to file
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Data saved and appended to Excel file: xRay_dBm_interface.xlsx on sheet 'p-d2-boo'
+Excel file formatted and saved as xRay_dBm_interface.xlsx.
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+8. Disconnecting from device
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+io@MSI-NB48LM1B:~/satr.io$

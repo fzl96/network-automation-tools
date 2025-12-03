@@ -23,7 +23,8 @@ from aci.healthcheck.checklist_aci import main_healthcheck_aci
 import sys
 import os
 import time
-
+from legacy.customer_context import get_customer_name
+customer_name = get_customer_name()
 # ============================================================
 # Utility Functions
 # ============================================================

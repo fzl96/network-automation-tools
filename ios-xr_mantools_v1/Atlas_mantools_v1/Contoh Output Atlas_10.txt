@@ -1,0 +1,101 @@
+io@MSI-NB48LM1B:~/satr.io$ python3 Atlas_10.py
+
+
+ ______________________________________________________________________
+|:..                                                   ''':::::%%%%%%%%|
+|%%%:::::..                      A T L A S                   ''::::%%%%|
+|%%%%%%%:::::.....__________________________________________________:::|
+
+Description   : Automated Traceroute with IP to Hostname Mapping
+Version       : 1.0
+------------------------------------------------------------------------
+
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+1. Connecting to the Jump host
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Jump Server Prompt: >
+>
+
+**********Connected to the Jump host**********
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+2. Connecting to the Dest Router
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Enter the destination to connect (e.g: 'p-d2-bks', 'me-d6-sbr-4'): p-d3-lbg
+Anda tidak diperbolehkan menggunakan command :
+> telnet p-d3-lbg
+Trying 61.5.14.36...
+Connected to p-d3-lbg.
+Escape character is '^]'.
+
+
+                            !!!! WARNING !!!!
+             This Node is the property of PT.TELKOM INDONESIA
+                        All actions are monitored
+                    Unauthorized access is prohibited
+                       Violators will be prosecuted
+
+
+username:
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+3. Destination Device Prompt
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Authentication succeeded. Your password will expire in 7 weeks + 6 days  + 16 hours  + 52 Minutes
+Router Prompt: RP/0/RP1/CPU0:P-D3-LBG#
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+6. Connected to the Router
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Enter the destination IPv4 for traceroute: 118.98.9.22
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+7. Traceroute Output
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Wed Dec  3 16:27:58.756 WIB
+RP/0/RP1/CPU0:P-D3-LBG#
+
+RP/0/RP1/CPU0:P-D3-LBG#traceroute mpls ipv4 118.98.9.22/32
+
+Wed Dec  3 16:28:13.519 WIB
+
+Tracing MPLS Label Switched Path to 118.98.9.22/32, timeout is 2 seconds
+
+Codes: '!' - success, 'Q' - request not sent, '.' - timeout,
+  'L' - labeled output interface, 'B' - unlabeled output interface,
+  'D' - DS Map mismatch, 'F' - no FEC mapping, 'f' - FEC mismatch,
+  'M' - malformed request, 'm' - unsupported tlvs, 'N' - no rx label,
+  'P' - no rx intf label prot, 'p' - premature termination of LSP,
+  'R' - transit router, 'I' - unknown upstream index,
+  'X' - unknown return code, 'x' - return code 0
+
+Type escape sequence to abort.
+
+  0 118.98.59.30 MRU 9178 [Labels: 32311 Exp: 0]
+L 1 118.98.59.29 MRU 9178 [Labels: 32009 Exp: 0] 6 ms
+L 2 61.94.0.226 MRU 9174 [Labels: 32010 Exp: 0] 21 ms
+L 3 118.98.5.222 MRU 9178 [Labels: implicit-null Exp: 0] 19 ms
+! 4 61.94.116.118 17 ms
+RP/0/RP1/CPU0:P-D3-LBG#
+------------------------------------------------------------------------------------------
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+8. Disconnecting from the Router
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Connection successfully disconnected.
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+9. IP Address to Hostname translation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+118.98.9.22 -> pe2-d5-kbl-vpn [loopback0]
+118.98.59.30 -> p-d3-lbg [Bundle-Ether16]
+118.98.59.29 -> p-d2-cka [Bundle-Ether16]
+61.94.0.226 -> p-d5-rkt [Bundle-Ether15]
+118.98.5.222 -> p-d5-kbl [Bundle-Ether9.50]
+61.94.116.118 -> not found in the database
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+10. Finish
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
