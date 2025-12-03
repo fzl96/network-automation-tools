@@ -197,7 +197,7 @@ def connect_to_device(device: Dict[str, str]) -> NetworkDriver:
 
 
 # === BACKUP FUNCTIONS ===
-def backup_configs(device) -> None:
+def backup_configs(device, device_dir: str) -> None:
     ip = device["ip"]
 
     try:
@@ -213,9 +213,6 @@ def backup_configs(device) -> None:
         hostname = facts.get("hostname", ip)
         configs = device_conn.get_config()
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-
-        device_dir = os.path.join(BACKUP_DIR, customer, hostname)
-        ensure_dir(device_dir)
 
         for cfg_type, cfg_content in configs.items():
             if cfg_content:
@@ -236,7 +233,9 @@ def backup_configs(device) -> None:
         console.print(f"[red]❌ Error backing up {ip}: {e}[/red]")
 
 
-def backup_commands(device: Dict[str, str], commands: List[str]) -> None:
+def backup_commands(
+    device: Dict[str, str], commands: List[str], device_dir: str
+) -> None:
     ip = device["ip"]
 
     logging.info(f"Connecting to {ip} for command execution...")
@@ -311,7 +310,11 @@ def display_inventory_table(devices: List[Dict[str, str]]) -> None:
 
 
 # === MAIN LOGIC ===
-def run_backup(username: Optional[str] = None, password: Optional[str] = None) -> None:
+def run_backup(
+    username: Optional[str] = None,
+    password: Optional[str] = None,
+    base_dir: Optional[str] = None,
+) -> None:
     """Main function to handle user menu and backup options."""
     devices = load_inventory()
     # devices = auto_update_inventory(devices, username, password)
@@ -334,9 +337,15 @@ def run_backup(username: Optional[str] = None, password: Optional[str] = None) -
 
         choice = input("\nEnter your choice: ").strip().lower()
 
+        if base_dir:
+            path = os.path.join(base_dir, "legacy", "backup")
+        else:
+            path = os.path.join("results", "legacy", "backup")
+
         if choice == "1":
             slow_print("\n🚀 Starting configuration backups...\n")
             for dev in devices:
+                hostname = dev.get("name", "")
                 if (
                     not dev.get("ip")
                     or not dev.get("username")
@@ -351,7 +360,10 @@ def run_backup(username: Optional[str] = None, password: Optional[str] = None) -
                 console.print(
                     f"[green]Starting backup for {dev.get('ip'), ''} - {dev.get('name', '')}[/green]"
                 )
-                backup_configs(dev)
+
+                device_dir = os.path.join(path, customer, hostname)
+                ensure_dir(device_dir)
+                backup_configs(dev, device_dir)
             pause()
 
         # elif choice == "2":
@@ -371,6 +383,7 @@ def run_backup(username: Optional[str] = None, password: Optional[str] = None) -
             commands = [cmd.strip() for cmd in raw_cmds.split(",") if cmd.strip()]
             slow_print("\n🚀 Starting full backups (config + commands)...\n")
             for dev in devices:
+                hostname = dev.get("name", "")
                 if (
                     not dev.get("ip")
                     or not dev.get("username")
@@ -384,8 +397,11 @@ def run_backup(username: Optional[str] = None, password: Optional[str] = None) -
                 console.print(
                     f"[green]Starting backup for {dev.get('ip'), ''} - {dev.get('name', '')}[/green]"
                 )
-                backup_commands(dev, commands)
-                backup_configs(dev)
+
+                device_dir = os.path.join(path, customer, hostname)
+                ensure_dir(device_dir)
+                backup_commands(dev, commands, device_dir)
+                backup_configs(dev, device_dir)
             pause()
 
         elif choice == "q":
