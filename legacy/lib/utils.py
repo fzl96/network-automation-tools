@@ -79,7 +79,7 @@ def show_version(conn: BaseConnection, device_type: str):
         first = show_ver[0]
         hostname = first.get("hostname", "")
         uptime = first.get("uptime", "")
-        version = first.get("version", "")
+        version = first.get("version", "") or first.get("os", "")
 
         data = {
             "hostname": hostname,
