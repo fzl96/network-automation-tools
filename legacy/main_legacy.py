@@ -9,7 +9,7 @@ import os
 import time
 import getpass
 from legacy.creds.credential_manager import save_credentials, load_credentials
-from legacy.inventory.inventory import create_inventory, show_inventory, load_devices
+from legacy.inventory.inventory import create_inventory, show_inventory
 from legacy.backup_config.backup import run_backup
 from legacy.lib.utils import collect_devices_data
 from legacy.lib.snapshot import take_snapshot
@@ -117,21 +117,17 @@ def main():
 
         elif choice == "5":
             slow_print("\n📄 Taking snapshots and health check...")
-            devices = load_devices()
             take_snapshot(customer_name, base_dir)
             pause()
 
         elif choice == "6":
             slow_print("\n📄 Comparing snapshots...")
-            devices = load_devices()
-            compare(devices, customer_name, base_dir)
+            compare(customer_name, base_dir)
             pause()
 
         elif choice == "7":
             slow_print("\n📄 Running tool...")
-            devices = load_devices()
-            collect_devices_data(devices, customer_name, base_dir)
-            # compare(devices, customer_name, base_dir)
+            collect_devices_data(customer_name, base_dir)
             pause()
 
         elif choice == "q":

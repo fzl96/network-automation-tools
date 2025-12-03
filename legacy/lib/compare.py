@@ -9,6 +9,8 @@ from openpyxl.styles import Alignment
 from openpyxl.utils import get_column_letter
 from openpyxl.cell.cell import MergedCell
 
+from legacy.lib.utils import load_devices
+
 console = Console()
 
 
@@ -370,7 +372,8 @@ def save_to_excel(
     wb.save(filepath)
 
 
-def compare(devices, customer_name, base_dir=None):
+def compare(customer_name, base_dir=None):
+    devices = load_devices()
     if base_dir:
         path = os.path.join(base_dir, "legacy", "compare")
         snapshot_path = os.path.join(base_dir, "legacy", "snapshot")

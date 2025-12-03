@@ -20,25 +20,9 @@ from openpyxl.utils import get_column_letter
 console = Console()
 
 
-def map_os_to_device_type(os_type: str) -> str:
-    os_type = os_type.lower()
-
-    mapping = {
-        "ios": "cisco_ios",
-        "iosxe": "cisco_ios",
-        "nxos": "cisco_nxos",
-        "eos": "arista_eos",
-        "junos": "juniper_junos",
-        "iosxr": "cisco_xr",
-    }
-
-    return mapping.get(os_type, "cisco_ios")  # safe default
-
-
 def capture_device_output(creds):
     hostname = creds["hostname"]
-    device_type = map_os_to_device_type(creds["os"])
-    creds["device_type"] = device_type
+    device_type = creds["device_type"]
     conn = connect_to_device(creds)
 
     if conn:

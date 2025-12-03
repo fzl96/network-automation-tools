@@ -22,6 +22,21 @@ def load_key():
         return key_file.read()
 
 
+def map_os_to_device_type(os_type: str) -> str:
+    os_type = os_type.lower()
+
+    mapping = {
+        "ios": "cisco_ios",
+        "iosxe": "cisco_ios",
+        "nxos": "cisco_nxos",
+        "eos": "arista_eos",
+        "junos": "juniper_junos",
+        "iosxr": "cisco_xr",
+    }
+
+    return mapping.get(os_type, "cisco_ios")  # safe default
+
+
 def connect_to_device(creds):
     key = load_key()
     fernet = Fernet(key)
@@ -489,12 +504,18 @@ def collect_data_mantools(creds):
         return ""
 
 
-def collect_devices_data(devices, customer_name, base_dir=None):
+def collect_devices_data(customer_name, base_dir=None):
+    devices = load_devices()
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
+
     if base_dir:
-        path = os.path.join(base_dir, "legacy", "mantools", timestamp)
+        path = os.path.join(
+            base_dir, "legacy", "mantools", f"{customer_name}_{timestamp}"
+        )
     else:
-        path = os.path.join("legacy", "results", "mantools", timestamp)
+        path = os.path.join(
+            "results", "legacy", "mantools", f"{customer_name}_{timestamp}"
+        )
     os.makedirs(path, exist_ok=True)
 
     for dev in devices:
@@ -516,11 +537,13 @@ def load_devices(file="inventory.csv"):
 
                 hostname, ip, os_type, username, enc_password = row
 
+                device_type = map_os_to_device_type(os_type)
                 devices.append(
                     {
                         "hostname": hostname,
                         "ip": ip,
                         "os": os_type,
+                        "device_type": device_type,
                         "username": username,
                         "password": enc_password,
                     }
