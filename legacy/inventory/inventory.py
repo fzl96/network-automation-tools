@@ -336,6 +336,8 @@ def detect_nxos_fallback(ip, username, password):
     return None
 
 def add_to_inventory(ip, hostname, os_type, username, password):
+    #  update entry di inventory.csv
+    # Return "added" atau "updated" agar bisa dipakai GUI.
     enc_password = encrypt_value(password)
     rows = []
     found = False
@@ -357,12 +359,16 @@ def add_to_inventory(ip, hostname, os_type, username, password):
     if not found:
         rows.append([hostname, ip, os_type, username, enc_password])
         print(f"Added {hostname} ({ip}, {os_type})")
+        status = "added"
     else:
         print(f"Updated {hostname} ({ip}, {os_type})")
+        status = "updated"
 
     with open(INVENTORY_FILE, "w", newline="") as csvfile:
         writer = csv.writer(csvfile, delimiter=";")
         writer.writerows(rows)
+
+    return status  
 
 def auto_fix_inventory(username, password):
     print("Checking inventory for incomplete entries...")
@@ -447,6 +453,56 @@ def auto_fix_inventory(username, password):
     else:
         print("Inventory is already complete.\n")
 
+def create_inventory_gui(ip_list, username, password, save_creds=False, profile_name="default"):
+    
+    # Versi GUI untuk membuat / update inventory.
+    # Tidak memakai input() atau getpass().
+    # Tidak memanggil auto_fix_inventory.
+    # Mengembalikan summary hasil untuk ditampilkan di GUI.
+    
+    # EDITABLE AREA: untuk otomatis simpan credential dari GUI
+    if save_creds and username and password:
+        save_credentials(profile_name, username, password)
+
+    results = {
+        "added": [],
+        "updated": [],
+        "failed": []
+    }
+
+    for raw_ip in ip_list:
+        ip = raw_ip.strip()
+        if not ip:
+            continue
+
+        os_type, hostname = detect_os_type(ip, username, password)
+
+        if os_type == "AUTH_FAIL":
+            # tidak minta input lagi di sini, cukup catat gagal
+            results["failed"].append({
+                "ip": ip,
+                "reason": "AUTH_FAIL",
+                "hostname": None,
+                "os": None,
+            })
+            continue
+
+        if os_type and hostname:
+            status = add_to_inventory(ip, hostname, os_type, username, password)
+            results[status].append({
+                "ip": ip,
+                "hostname": hostname,
+                "os": os_type,
+            })
+        else:
+            results["failed"].append({
+                "ip": ip,
+                "reason": "DETECT_FAIL",
+                "hostname": hostname,
+                "os": os_type,
+            })
+
+    return results  # EDITABLE AREA: bisa dikembangkan untuk tambah info lain
 
 def create_inventory(username=None, password=None):
     print("Create or Update Device Inventory")

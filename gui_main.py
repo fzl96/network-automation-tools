@@ -41,12 +41,15 @@ except ImportError:
 # Import create and save inventory
 try:
     from legacy.inventory.inventory import (
-        create_inventory as legacy_create_inventory,
+        create_inventory as legacy_create_inventory,        # versi CLI (masih bisa dipakai di terminal)
         show_inventory as legacy_show_inventory,
+        create_inventory_gui as legacy_create_inventory_gui,  # versi GUI baru
     )
 except ImportError:
     legacy_create_inventory = None
     legacy_show_inventory = None
+    legacy_create_inventory_gui = None
+
 
 
 # Import backup config
@@ -158,6 +161,13 @@ class NetworkToolsApp(ctk.CTk):
             command=self.show_aci_tools,
         )
         btn_aci.pack(fill="x", padx=12, pady=4)
+
+        btn_iosxr_tools = ctk.CTkButton(
+            self.sidebar,
+            text="IOS-XR Tools",
+            command=self.show_iosxr_tools,
+        )
+        btn_iosxr_tools.pack(fill="x", padx=12, pady=4)
         
         btn_about= ctk.CTkButton(
             self.sidebar,
@@ -165,7 +175,8 @@ class NetworkToolsApp(ctk.CTk):
             command=self.show_about,
         )
         btn_about.pack(fill="x", padx=12, pady=4)        
-
+        
+        
         # footer apps
         footer_label = ctk.CTkLabel(
             self.sidebar,
@@ -264,8 +275,8 @@ class NetworkToolsApp(ctk.CTk):
 
         btn_q_aci = ctk.CTkButton(
             quick_frame,
-            text="Open ACI Tools",
-            command=self.show_aci_tools,
+            text="Create/Update Inventory Legacy",
+            command=self.show_legacy_inventory_page,
         )
         btn_q_aci.grid(row=0, column=1, padx=4, pady=4, sticky="ew")
 
@@ -318,6 +329,171 @@ class NetworkToolsApp(ctk.CTk):
 
 
     # ========================================================
+    # Legacy Tools - Create / Update Inventory (GUI Form)
+    # ========================================================
+
+    def show_legacy_inventory_page(self):
+        """
+        Halaman GUI untuk membuat / update inventory.
+        - Menggunakan credentials dari credential_manager (profile 'default').
+        - IP list diinput via Textbox (satu IP per baris).
+        """
+        if legacy_create_inventory_gui is None:
+            messagebox.showerror(
+                "Module Not Found",
+                "Fungsi 'create_inventory_gui' tidak bisa diimport.\n"
+                "Cek modul legacy.inventory.inventory.",
+            )
+            return
+
+        if legacy_load_credentials is None:
+            messagebox.showerror(
+                "Module Not Found",
+                "Fungsi 'load_credentials' tidak bisa diimport.\n"
+                "Cek modul legacy.creds.credential_manager.",
+            )
+            return
+
+        # Ambil credential default
+        username, password = legacy_load_credentials()
+        if not username or not password:
+            messagebox.showwarning(
+                "Credentials Required",
+                "Belum ada credentials yang disimpan.\n"
+                "Silakan isi dan simpan credentials dulu di menu 'Save Credentials'.",
+            )
+            return
+
+        # Bersihkan main_frame 
+        self._clear_main_frame()
+
+        container = ctk.CTkFrame(self.main_frame)
+        container.grid(row=0, column=0, sticky="nsew", padx=24, pady=24)
+        container.grid_columnconfigure(0, weight=1)
+        container.grid_rowconfigure(3, weight=1)
+
+        title = ctk.CTkLabel(
+            container,
+            text="Create / Update Device Inventory",
+            font=ctk.CTkFont(size=18, weight="bold"),
+        )
+        title.grid(row=0, column=0, sticky="w", pady=(0, 8))
+
+        # Info credentials yang dipakai
+        cred_label = ctk.CTkLabel(
+            container,
+            text=f"Using credentials profile 'default' → {username}",
+            font=ctk.CTkFont(size=11),
+        )
+        cred_label.grid(row=1, column=0, sticky="w", pady=(0, 8))
+
+        # Label IP list
+        ip_label = ctk.CTkLabel(
+            container,
+            text="Device IP list (satu IP per baris):",
+        )
+        ip_label.grid(row=2, column=0, sticky="w")
+
+        # Textbox IP
+        ip_textbox = ctk.CTkTextbox(container, height=150)
+        ip_textbox.grid(row=3, column=0, sticky="nsew", pady=(4, 8))
+
+        # Area untuk summary hasil
+        result_label = ctk.CTkLabel(
+            container,
+            text="Result:",
+            anchor="w",
+        )
+        result_label.grid(row=4, column=0, sticky="w", pady=(8, 0))
+
+        result_text = ctk.CTkTextbox(container, height=80)
+        result_text.grid(row=5, column=0, sticky="nsew", pady=(4, 8))
+
+        # --- Fungsi internal untuk menjalankan inventory di thread terpisah ---
+        def run_inventory_job():
+            raw_text = ip_textbox.get("1.0", "end")
+            ip_list = [line.strip() for line in raw_text.splitlines() if line.strip()]
+
+            if not ip_list:
+                messagebox.showerror("Error", "IP list tidak boleh kosong.")
+                return
+
+            # Bersihkan hasil lama
+            result_text.delete("1.0", "end")
+            result_text.insert("end", "Running inventory...\n")
+
+            def job():
+                try:
+                    results = legacy_create_inventory_gui(
+                        ip_list,
+                        username,
+                        password,
+                        save_creds=False,      # EDITABLE AREA: bisa diubah jadi True kalau mau overwrite credentials 
+                        profile_name="default" # EDITABLE AREA
+                    )
+                except Exception as e:
+                    # Update GUI harus lewat main thread → pakai .after
+                    self.after(0, lambda: messagebox.showerror("Error", f"Gagal menjalankan inventory:\n{e}"))
+                    return
+
+                # Fungsi untuk update result_text di main thread
+                def update_result():
+                    result_text.delete("1.0", "end")
+
+                    result_text.insert("end", "=== Inventory Result ===\n\n")
+
+                    if results["added"]:
+                        result_text.insert("end", "Added:\n")
+                        for item in results["added"]:
+                            result_text.insert(
+                                "end",
+                                f"  - {item['hostname']} ({item['ip']}, {item['os']})\n"
+                            )
+                        result_text.insert("end", "\n")
+
+                    if results["updated"]:
+                        result_text.insert("end", "Updated:\n")
+                        for item in results["updated"]:
+                            result_text.insert(
+                                "end",
+                                f"  - {item['hostname']} ({item['ip']}, {item['os']})\n"
+                            )
+                        result_text.insert("end", "\n")
+
+                    if results["failed"]:
+                        result_text.insert("end", "Failed:\n")
+                        for item in results["failed"]:
+                            result_text.insert(
+                                "end",
+                                f"  - {item['ip']} → {item['reason']}\n"
+                            )
+                        result_text.insert("end", "\n")
+
+                    result_text.insert("end", "Done.\n")
+
+                self.after(0, update_result)
+
+            # Jalankan di thread supaya GUI tidak freeze
+            self._run_in_thread(job)
+
+        # Tombol Run
+        run_button = ctk.CTkButton(
+            container,
+            text="Run Inventory",
+            command=run_inventory_job,
+        )
+        run_button.grid(row=6, column=0, sticky="ew", pady=(4, 4))
+
+        # Tombol Back
+        back_button = ctk.CTkButton(
+            container,
+            text="Back to Legacy Menu",
+            command=self.show_legacy_tools,
+        )
+        back_button.grid(row=7, column=0, sticky="ew", pady=(4, 0))
+
+
+    # ========================================================
     # Halaman Legacy Tools (Menampilkan Button Legacy Tools)
     # ========================================================
 
@@ -365,7 +541,7 @@ class NetworkToolsApp(ctk.CTk):
         ctk.CTkButton(
             btn_frame,
             text="Create / Update Inventory",
-            command=self._handle_legacy_inventory,
+            command=self.show_legacy_inventory_page,
         ).grid(row=2, column=0, sticky="ew", pady=4)
 
         # Tombol Backup Device Config
@@ -662,7 +838,76 @@ class NetworkToolsApp(ctk.CTk):
             "TODO",
         )
 
+    # ========================================================
+    # Halaman IOS-XR Tools 
+    # ========================================================
 
+    def show_iosxr_tools(self):
+        # Menampilkan halaman menu IOS-XR Tools.
+        self.active_menu.set("IOS-XR")
+        self._clear_main_frame()
+
+        container = ctk.CTkFrame(self.main_frame)
+        container.grid(row=0, column=0, sticky="nsew", padx=24, pady=24)
+        container.grid_columnconfigure(0, weight=1)
+
+        title = ctk.CTkLabel(
+            container,
+            text="IOS-XR Tools",
+            font=ctk.CTkFont(size=18, weight="bold"),
+        )
+        title.grid(row=0, column=0, sticky="w", pady=(0, 12))
+
+        subtitle = ctk.CTkLabel(
+            container,
+            text="Pilih IOS-XR Tools yang ingin dijalankan:",
+            justify="left",
+        )
+        subtitle.grid(row=1, column=0, sticky="w", pady=(0, 12))
+
+        btn_frame = ctk.CTkFrame(container)
+        btn_frame.grid(row=2, column=0, sticky="ew")
+        btn_frame.grid_columnconfigure(0, weight=1)
+
+        # ----------------------------------------------------
+        #  Tambah / kurangi tombol IOS-XR Tools
+        # ----------------------------------------------------
+        
+        ctk.CTkButton(
+            btn_frame,
+            text="Atlas (TODO: Integrasi GUI)",
+            command=self._handle_aci_snapshot_todo,
+        ).grid(row=1, column=0, sticky="ew", pady=4)
+
+        ctk.CTkButton(
+            btn_frame,
+            text="CRCell (TODO: Integrasi GUI)",
+            command=self._handle_aci_snapshot_todo,
+        ).grid(row=2, column=0, sticky="ew", pady=4)
+
+        ctk.CTkButton(
+            btn_frame,
+            text="Snipe (TODO: Integrasi GUI)",
+            command=self._handle_aci_compare_todo,
+        ).grid(row=3, column=0, sticky="ew", pady=4)
+
+        ctk.CTkButton(
+            btn_frame,
+            text="Xray (TODO: Integrasi GUI)",
+            command=self._handle_aci_compare_todo,
+        ).grid(row=4, column=0, sticky="ew", pady=4)
+
+
+        info = ctk.CTkLabel(
+            container,
+            text=(),
+            justify="left",
+            font=ctk.CTkFont(size=11),
+        )
+        info.grid(row=3, column=0, sticky="w", pady=(16, 0))
+        
+        
+        
 # ============================================================
 # Entry point run GUI
 # ============================================================
