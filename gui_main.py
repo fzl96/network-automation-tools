@@ -27,9 +27,15 @@ except ImportError:
 
 # Import Save Credentials Tools
 try:
-    from legacy.creds.credential_manager import save_credentials as legacy_save_credentials
+    from legacy.creds.credential_manager import (
+        save_credentials as legacy_save_credentials,
+        load_credentials as legacy_load_credentials,
+        list_profiles as legacy_list_profiles,
+    )
 except ImportError:
     legacy_save_credentials = None
+    legacy_load_credentials = None
+    legacy_list_profiles = None
 
 
 # Import create and save inventory
@@ -351,8 +357,9 @@ class NetworkToolsApp(ctk.CTk):
         ctk.CTkButton(
             btn_frame,
             text="Save Credentials",
-            command=self._handle_legacy_save_credentials,
+            command=self.show_legacy_credentials_page,
         ).grid(row=1, column=0, sticky="ew", pady=4)
+
 
         # Tombol Create / Update Inventory
         ctk.CTkButton(
@@ -387,9 +394,15 @@ class NetworkToolsApp(ctk.CTk):
     # Legacy Handlers (untuk integrasi antara tombol dan pemanggilan tools)
     # ==============================================================================
 
-    def _handle_legacy_save_credentials(self):
-        # Handler tombol "Save Credentials".
-        # Memanggil fungsi save_credentials() dari legacy.creds.credential_manager.
+    # ========================================================
+    # Legacy Tools - Save Credentials (GUI Form)
+    # ========================================================
+
+    def show_legacy_credentials_page(self):
+        """
+        Halaman form untuk menyimpan credentials ke credential_manager.
+        Interaksi full via GUI, tanpa terminal.
+        """
         if legacy_save_credentials is None:
             messagebox.showerror(
                 "Module Not Found",
@@ -398,11 +411,96 @@ class NetworkToolsApp(ctk.CTk):
             )
             return
 
-        def _run():
+        # Bersihkan tampilan utama 
+        self._clear_main_frame()
+
+        container = ctk.CTkFrame(self.main_frame)
+        container.grid(row=0, column=0, sticky="nsew", padx=24, pady=24)
+        container.grid_columnconfigure(0, weight=1)
+
+        # Judul
+        title = ctk.CTkLabel(
+            container,
+            text="Save Credentials (Legacy Tools)",
+            font=ctk.CTkFont(size=18, weight="bold"),
+        )
+        title.grid(row=0, column=0, sticky="w", pady=(0, 12))
+
+        # EDITABLE AREA: default profile name
+        default_profile = "default"
+
+        # Label + Entry Profile Name
+        ctk.CTkLabel(
+            container,
+            text="Profile Name:",
+        ).grid(row=1, column=0, sticky="w")
+
+        profile_entry = ctk.CTkEntry(container)
+        profile_entry.insert(0, default_profile)
+        profile_entry.grid(row=2, column=0, sticky="ew", pady=(0, 8))
+
+        # Label + Entry Username
+        ctk.CTkLabel(
+            container,
+            text="Username:",
+        ).grid(row=3, column=0, sticky="w")
+
+        username_entry = ctk.CTkEntry(container)
+        username_entry.grid(row=4, column=0, sticky="ew", pady=(0, 8))
+
+        # Label + Entry Password (masked)
+        ctk.CTkLabel(
+            container,
+            text="Password:",
+        ).grid(row=5, column=0, sticky="w")
+
+        password_entry = ctk.CTkEntry(container, show="*")
+        password_entry.grid(row=6, column=0, sticky="ew", pady=(0, 12))
+
+        # --- Fungsi internal untuk menyimpan credentials ---
+        def on_save_clicked():
+            profile_name = profile_entry.get().strip()
+            username = username_entry.get().strip()
+            password = password_entry.get().strip()
+
+            if not profile_name:
+                messagebox.showerror("Error", "Profile name tidak boleh kosong.")
+                return
+            if not username:
+                messagebox.showerror("Error", "Username tidak boleh kosong.")
+                return
+            if not password:
+                messagebox.showerror("Error", "Password tidak boleh kosong.")
+                return
+
             try:
-                legacy_save_credentials()
+                # Panggil backend  untuk simpan ke file terenkripsi
+                legacy_save_credentials(profile_name, username, password)
+                messagebox.showinfo(
+                    "Success",
+                    f"Credentials untuk profile '{profile_name}' berhasil disimpan.",
+                )
             except Exception as e:
-                messagebox.showerror("Error", f"Error saat Save Credentials:\n{e}")
+                messagebox.showerror(
+                    "Error",
+                    f"Gagal menyimpan credentials:\n{e}"
+                )
+
+        # Tombol Save
+        save_button = ctk.CTkButton(
+            container,
+            text="Save Credentials",
+            command=on_save_clicked,
+        )
+        save_button.grid(row=7, column=0, sticky="ew", pady=(4, 4))
+
+        # Tombol Back ke Legacy Menu
+        back_button = ctk.CTkButton(
+            container,
+            text="Back to Legacy Menu",
+            command=self.show_legacy_tools,
+        )
+        back_button.grid(row=8, column=0, sticky="ew", pady=(4, 0))
 
         self._run_in_thread(_run)
 
