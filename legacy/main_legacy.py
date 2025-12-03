@@ -71,7 +71,6 @@ def show_menu():
 
 def main():
     base_dir = None
-    customer_name = "MSI"
     while True:
         print_header()
         show_menu()
@@ -117,17 +116,17 @@ def main():
 
         elif choice == "5":
             slow_print("\n📄 Taking snapshots and health check...")
-            take_snapshot(customer_name, base_dir)
+            take_snapshot(base_dir)
             pause()
 
         elif choice == "6":
             slow_print("\n📄 Comparing snapshots...")
-            compare(customer_name, base_dir)
+            compare(base_dir)
             pause()
 
         elif choice == "7":
             slow_print("\n📄 Running tool...")
-            collect_devices_data(customer_name, base_dir)
+            collect_devices_data(base_dir)
             pause()
 
         elif choice == "q":

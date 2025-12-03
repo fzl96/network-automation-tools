@@ -16,6 +16,7 @@ from datetime import datetime
 from openpyxl import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.utils import get_column_letter
+from legacy.customer_context import get_customer_name
 
 console = Console()
 
@@ -122,7 +123,8 @@ def health_check(customer_name, data, base_dir):
     print(f"Snapshot saved to {health_check_path}")
 
 
-def take_snapshot(customer_name, base_dir=None):
+def take_snapshot(base_dir=None):
+    customer_name = get_customer_name()
     devices = load_devices()
 
     if base_dir:

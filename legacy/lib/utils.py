@@ -11,6 +11,7 @@ from netmiko.base_connection import BaseConnection
 from rich.console import Console
 from cryptography.fernet import Fernet
 from typing import Dict, List, Any, cast
+from legacy.customer_context import get_customer_name
 
 KEY_FILE = os.path.join("legacy/creds", "key.key")
 
@@ -504,7 +505,8 @@ def collect_data_mantools(creds):
         return ""
 
 
-def collect_devices_data(customer_name, base_dir=None):
+def collect_devices_data(base_dir=None):
+    customer_name = get_customer_name()
     devices = load_devices()
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
 
