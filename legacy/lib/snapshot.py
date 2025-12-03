@@ -1,3 +1,4 @@
+import copy
 import json
 import os
 from legacy.lib.utils import (
@@ -16,6 +17,7 @@ from datetime import datetime
 from openpyxl import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.utils import get_column_letter
+from openpyxl.styles import Alignment
 from legacy.customer_context import get_customer_name
 
 console = Console()
@@ -62,10 +64,29 @@ def capture_device_output(creds):
         console.print(f"[red]ERROR: Failed to capture from {hostname}[/red]")
 
 
-# TODO: Add interfaces CRC
+def autosize_columns(ws: Worksheet) -> None:
+    """Autosize all columns in a worksheet based on content length."""
+    for col in ws.columns:
+        first_cell = col[0]
+        if first_cell.column is None:
+            continue
+
+        col_letter = get_column_letter(first_cell.column)
+        max_len = 0
+
+        for cell in col:
+            try:
+                val = "" if cell.value is None else str(cell.value)
+                if len(val) > max_len:
+                    max_len = len(val)
+            except Exception:
+                pass
+
+        ws.column_dimensions[col_letter].width = max_len + 2
+
+
 def health_check(customer_name, data, base_dir):
     path = os.path.join(base_dir, "health_check")
-
     os.makedirs(path, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -74,21 +95,19 @@ def health_check(customer_name, data, base_dir):
     )
 
     wb: Workbook = Workbook()
-    ws: Worksheet = wb.create_sheet("Health Check", 0)
-    ws.title = "Health Check"
 
-    # Header row
-    headers = [
-        "hostname",
-        "version",
-        "cpu_utilization",
-        "memory_utilization",
-        "storage_utilization",
-        "uptime",
+    ws_health: Worksheet = wb.create_sheet("Health Check", 0)
+
+    headers_health = [
+        "Hostname",
+        "Version",
+        "Cpu utilization",
+        "Memory utilization",
+        "Storage utilization",
+        "Uptime",
     ]
-    ws.append(headers)
+    ws_health.append(headers_health)
 
-    # Fill rows per device
     for hostname, device_data in data.items():
         health = device_data.get("health_check", {})
 
@@ -100,27 +119,93 @@ def health_check(customer_name, data, base_dir):
             health.get("storage_utilization", ""),
             health.get("uptime", ""),
         ]
-        ws.append(row)
+        ws_health.append(row)
 
-    # Optional: autosize columns a bit
-    for col in ws.columns:
-        max_len = 0
+    autosize_columns(ws_health)
 
-        assert col[0].column is not None
-        col_letter = get_column_letter(col[0].column)
+    ws_crc: Worksheet = wb.create_sheet("CRC Interfaces", 1)
 
-        for cell in col:
-            try:
-                val_len = len(str(cell.value)) if cell.value is not None else 0
-                if val_len > max_len:
-                    max_len = val_len
-            except Exception:
-                pass
-        ws.column_dimensions[col_letter].width = max_len + 2
+    headers_crc = [
+        "Hostname",
+        "Interface",
+        "CRC",
+        "Link status",
+        "Protocol status",
+        "Description",
+    ]
+    ws_crc.append(headers_crc)
+
+    current_row = 2
+
+    for hostname, device_data in data.items():
+        interfaces = device_data.get("interfaces", [])
+
+        first_row_for_host = None
+        rows_for_this_host = 0
+
+        for intf in interfaces:
+            crc_raw = intf.get("crc", "")
+            crc = "" if crc_raw is None else str(crc_raw).strip()
+
+            if crc in ("", "0"):
+                continue
+
+            ws_crc.append(
+                [
+                    hostname,
+                    intf.get("interface", ""),
+                    crc,
+                    intf.get("link_status", ""),
+                    intf.get("protocol_status", ""),
+                    intf.get("description", ""),
+                ]
+            )
+
+            if first_row_for_host is None:
+                first_row_for_host = current_row
+
+            current_row += 1
+            rows_for_this_host += 1
+
+        if first_row_for_host is not None and rows_for_this_host > 1:
+            ws_crc.merge_cells(
+                start_row=first_row_for_host,
+                start_column=1,
+                end_row=first_row_for_host + rows_for_this_host - 1,
+                end_column=1,
+            )
+
+            master_cell = ws_crc.cell(first_row_for_host, 1)
+            master_cell.value = hostname
+
+            master_cell.alignment = Alignment(vertical="center")
+
+            autosize_columns(ws_crc)
+
+            if "Sheet" in wb.sheetnames:
+                std = wb["Sheet"]
+                if std.max_row == 1 and std["A1"].value is None:
+                    wb.remove(std)
 
     wb.save(health_check_path)
-
     print(f"Snapshot saved to {health_check_path}")
+
+
+def simulate_two_crc_per_device(data):
+    """
+    Untuk setiap device dalam data, pilih dua interface pertama
+    dan beri CRC non-zero untuk testing.
+    """
+    for hostname, device_data in data.items():
+        interfaces = device_data.get("interfaces", [])
+        injected = 0
+
+        for idx, intf in enumerate(interfaces):
+            if injected < 2:
+                intf["crc"] = str(100 + injected)
+                injected += 1
+            else:
+                break
 
 
 def take_snapshot(base_dir=None):
@@ -153,4 +238,5 @@ def take_snapshot(base_dir=None):
 
     print(f"Snapshot saved to {snapshot_path}")
 
+    simulate_two_crc_per_device(result)
     health_check(customer_name, result, path)
