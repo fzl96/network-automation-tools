@@ -8,10 +8,10 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment
 from openpyxl.cell.cell import MergedCell
 from openpyxl.utils import get_column_letter
-from typing import Optional, Tuple
-import csv
 from legacy.customer_context import get_customer_name
+
 customer_name = get_customer_name()
+
 
 def _autosize_columns(ws, padding=2, min_width=12, max_width=80):
     widths = {}
@@ -431,7 +431,6 @@ def compare_snapshots(file1, file2):
                     "endpoints": err_eps,
                 }
             )
-
 
     result["output_error_changes"] = output_changes
 
