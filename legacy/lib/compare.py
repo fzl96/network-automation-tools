@@ -179,7 +179,7 @@ def compare_snapshots(devices, file1, file2):
 
                 elif "arp_table" in path:
                     arp_details = after.get(key, {})[index]
-                    result[host]["item_added"][f"{key}_added"].append(
+                    result[host]["added_items"][f"{key}_added"].append(
                         {
                             "item": f"{arp_details.get('ip_address', '')} - {arp_details.get('mac_address', '')}",
                             "details": f"Port: {arp_details.get('ports', '')}",
