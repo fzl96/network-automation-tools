@@ -191,23 +191,6 @@ def health_check(customer_name, data, base_dir):
     print(f"Snapshot saved to {health_check_path}")
 
 
-def simulate_two_crc_per_device(data):
-    """
-    Untuk setiap device dalam data, pilih dua interface pertama
-    dan beri CRC non-zero untuk testing.
-    """
-    for hostname, device_data in data.items():
-        interfaces = device_data.get("interfaces", [])
-        injected = 0
-
-        for idx, intf in enumerate(interfaces):
-            if injected < 2:
-                intf["crc"] = str(100 + injected)
-                injected += 1
-            else:
-                break
-
-
 def take_snapshot(base_dir=None):
     customer_name = get_customer_name()
     devices = load_devices()
@@ -238,5 +221,4 @@ def take_snapshot(base_dir=None):
 
     print(f"Snapshot saved to {snapshot_path}")
 
-    simulate_two_crc_per_device(result)
     health_check(customer_name, result, path)
