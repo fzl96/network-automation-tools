@@ -745,22 +745,75 @@ class NetworkToolsApp(ctk.CTk):
 
     def _handle_legacy_show_inventory(self):
         # Handler tombol "Show Inventory List".
-        # Memanggil fungsi show_inventory() dari legacy.inventory.inventory.
-        if legacy_show_inventory is None:
-            messagebox.showerror(
-                "Module Not Found",
-                "Fungsi 'show_inventory' tidak bisa diimport.\n"
-                "Cek modul legacy.inventory.inventory.",
-            )
-            return
+        # Display inventory from CSV in GUI instead of terminal.
+        self._clear_main_frame()
 
-        def _run():
+        container = ctk.CTkFrame(self.main_frame)
+        container.grid(row=0, column=0, sticky="nsew", padx=24, pady=24)
+        container.grid_columnconfigure(0, weight=1)
+        container.grid_rowconfigure(1, weight=1)
+
+        title = ctk.CTkLabel(
+            container,
+            text="Device Inventory List",
+            font=ctk.CTkFont(size=18, weight="bold"),
+        )
+        title.grid(row=0, column=0, sticky="w", pady=(0, 12))
+
+        # Create a textbox to display inventory
+        inventory_text = ctk.CTkTextbox(container, height=300)
+        inventory_text.grid(row=1, column=0, sticky="nsew", pady=(4, 8))
+
+        # Load and display inventory
+        try:
+            import csv
+            from legacy.creds.credential_manager import load_key
+            from cryptography.fernet import Fernet
+
+            inventory_file = "inventory.csv"
+            inventory_data = []
+
             try:
-                legacy_show_inventory()
-            except Exception as e:
-                messagebox.showerror("Error", f"Error saat Show Inventory:\n{e}")
+                with open(inventory_file, "r") as f:
+                    reader = csv.reader(f, delimiter=";")
+                    for row in reader:
+                        if len(row) >= 5:
+                            inventory_data.append(row)
+            except FileNotFoundError:
+                inventory_text.insert("end", "No inventory file found.\n")
 
-        self._run_in_thread(_run)
+            if inventory_data:
+                # Display header
+                header = f"{'Hostname':<20} {'IP':<18} {'OS Type':<12} {'Username':<15}\n"
+                inventory_text.insert("end", header)
+                inventory_text.insert("end", "-" * 70 + "\n")
+
+                # Display each device
+                for row in inventory_data:
+                    hostname = row[0] if len(row) > 0 else ""
+                    ip = row[1] if len(row) > 1 else ""
+                    os_type = row[2] if len(row) > 2 else ""
+                    username = row[3] if len(row) > 3 else ""
+
+                    line = f"{hostname:<20} {ip:<18} {os_type:<12} {username:<15}\n"
+                    inventory_text.insert("end", line)
+
+                inventory_text.insert("end", "\n" + "=" * 70 + "\n")
+                inventory_text.insert("end", f"Total devices: {len(inventory_data)}\n")
+            else:
+                inventory_text.insert("end", "Inventory is empty.\n")
+
+        except Exception as e:
+            inventory_text.insert("end", f"Error loading inventory:\n{e}\n")
+
+        inventory_text.configure(state="disabled")
+
+        # Back button
+        ctk.CTkButton(
+            container,
+            text="Back to Legacy Menu",
+            command=self.show_legacy_tools,
+        ).grid(row=2, column=0, sticky="ew", pady=(4, 0))
 
     # ------------------------------------------------------------------
     # Editable placeholder handlers for the custom legacy buttons
@@ -792,22 +845,15 @@ class NetworkToolsApp(ctk.CTk):
         )
         title.grid(row=0, column=0, sticky="w", pady=(0, 8))
 
-        ctk.CTkLabel(
-            container,
-            text="Optional base directory (leave empty to use default results path):",
-        ).grid(row=1, column=0, sticky="w")
-
-        base_entry = ctk.CTkEntry(container)
-        base_entry.grid(row=2, column=0, sticky="ew", pady=(4, 8))
-
         result_label = ctk.CTkLabel(container, text="Result:")
-        result_label.grid(row=3, column=0, sticky="w", pady=(4, 0))
+        result_label.grid(row=1, column=0, sticky="w", pady=(4, 0))
 
         result_text = ctk.CTkTextbox(container, height=140)
-        result_text.grid(row=4, column=0, sticky="nsew", pady=(4, 8))
+        result_text.grid(row=2, column=0, sticky="nsew", pady=(4, 8))
 
         def run_snapshot_job():
-            base_dir = base_entry.get().strip() or None
+            # Always use default results path (no optional directory input)
+            base_dir = None
 
             # disable button while running
             run_btn.configure(state="disabled")
@@ -852,14 +898,14 @@ class NetworkToolsApp(ctk.CTk):
             text="Run Snapshot + Healthcheck",
             command=run_snapshot_job,
         )
-        run_btn.grid(row=5, column=0, sticky="ew", pady=(4, 4))
+        run_btn.grid(row=3, column=0, sticky="ew", pady=(4, 4))
 
         # Back button
         ctk.CTkButton(
             container,
             text="Back to Legacy Menu",
             command=self.show_legacy_tools,
-        ).grid(row=6, column=0, sticky="ew", pady=(4, 0))
+        ).grid(row=4, column=0, sticky="ew", pady=(4, 0))
 
     def _legacy_custom_tool2(self):
 
