@@ -2,7 +2,7 @@ import sys
 import os
 import threading
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
 from PIL import Image
 import customtkinter as ctk
 
@@ -66,6 +66,13 @@ except ImportError:
     legacy_take_snapshot = None
 
 
+# Import compare snapshots
+try:
+    from legacy.lib.compare import compare_snapshots as legacy_compare_snapshots
+except ImportError:
+    legacy_compare_snapshots = None
+
+
 # Import fungsi ACI
 try:
     from aci.healthcheck.checklist_aci import main_healthcheck_aci
@@ -92,7 +99,7 @@ class NetworkToolsApp(ctk.CTk):
         super().__init__()
 
         # Pengaturan window dasar
-        self.title("MANTOOLS v.1.0 - GUI ")
+        self.title("MANTOOLS MOBILE v.1.0 - GUI ")
         self.iconbitmap("assets/logo_mantools.ico")
         self.geometry("1000x600")
         self.minsize(900, 500)
@@ -141,11 +148,20 @@ class NetworkToolsApp(ctk.CTk):
         # Judul 
         title_label = ctk.CTkLabel(
             self.sidebar,
-            text="MANTOOLS\nMSI Punya Bosque ",
+            text="MANTOOLS MOBILE ",
             font=ctk.CTkFont(size=17, weight="bold"),
             justify="center"
         )
-        title_label.pack(pady=(16, 24))
+        title_label.pack(pady=(1,1))
+
+        # Subjudul
+        subtitle_label = ctk.CTkLabel(
+            self.sidebar,
+            text=" Advanced Network Automation Tools",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            justify="center",
+        )
+        subtitle_label.pack(pady=(1,1))
 
         # Tombol navigasi utama
         btn_dashboard = ctk.CTkButton(
@@ -171,7 +187,7 @@ class NetworkToolsApp(ctk.CTk):
 
         btn_iosxr_tools = ctk.CTkButton(
             self.sidebar,
-            text="IOS-XR Tools",
+            text="SP Tools",
             command=self.show_iosxr_tools,
         )
         btn_iosxr_tools.pack(fill="x", padx=12, pady=4)
@@ -187,7 +203,7 @@ class NetworkToolsApp(ctk.CTk):
         # footer apps
         footer_label = ctk.CTkLabel(
             self.sidebar,
-            text="v1.0\n Mantools ",
+            text="v1.0\n Mantools Mobile ",
             font=ctk.CTkFont(size=11),
             justify="center",
         )
@@ -253,7 +269,7 @@ class NetworkToolsApp(ctk.CTk):
 
         title = ctk.CTkLabel(
             container,
-            text="Welcome to MANTOOLS Network Automation",
+            text="Welcome to MANTOOLS MOBILE Network Automation",
             font=ctk.CTkFont(size=20, weight="bold"),
         )
         title.grid(row=0, column=0, sticky="w", pady=(0, 12))
@@ -261,8 +277,8 @@ class NetworkToolsApp(ctk.CTk):
         desc = ctk.CTkLabel(
             container,
             text=(
-                "Gunakan menu di sidebar untuk memilih jenis tools:\n"
-                "- Legacy Tools: inventory, backup config, dsb.\n"
+                "Use Menu in sidebar to select  tools:\n"
+                "- Legacy Tools: inventory, backup config, ect.\n"
                 "- ACI Tools: snapshot, health-check, compare snapshot.\n\n"
             ),
             justify="left",
@@ -543,45 +559,38 @@ class NetworkToolsApp(ctk.CTk):
             command=self.show_legacy_credentials_page,
         ).grid(row=1, column=0, sticky="ew", pady=4)
 
-
-        # Tombol Create / Update Inventory
+        # Tombol Show Inventory List
         ctk.CTkButton(
             btn_frame,
-            text="Create / Update Inventory",
-            command=self.show_legacy_inventory_page,
-        ).grid(row=2, column=0, sticky="ew", pady=4)
+            text="Show Inventory List",
+            command=self._handle_legacy_show_inventory,
+        ).grid(row=3, column=0, sticky="ew", pady=4)
 
         # Tombol Backup Device Config
         ctk.CTkButton(
             btn_frame,
             text="Backup Device Config",
             command=self._handle_legacy_backup,
-        ).grid(row=3, column=0, sticky="ew", pady=4)
+        ).grid(row=2, column=0, sticky="ew", pady=4)
 
-        # Tombol Show Inventory List
-        ctk.CTkButton(
-            btn_frame,
-            text="Show Inventory List",
-            command=self._handle_legacy_show_inventory,
-        ).grid(row=4, column=0, sticky="ew", pady=4)
 
         ctk.CTkButton(
             btn_frame,
             text="Take Snapshot + Healthcheck",
             command=self._snapshot_handler_legacy,
-        ).grid(row=5, column=0, sticky="ew", pady=4)
+        ).grid(row=4, column=0, sticky="ew", pady=4)
 
         ctk.CTkButton(
             btn_frame,
             text="Compare Snapshots",
             command=self._legacy_custom_tool2,
-        ).grid(row=6, column=0, sticky="ew", pady=4)
+        ).grid(row=5, column=0, sticky="ew", pady=4)
 
         ctk.CTkButton(
             btn_frame,
             text="Gather MANTOOLS ONLINE File",
             command=self._legacy_custom_tool3,
-        ).grid(row=7, column=0, sticky="ew", pady=4)
+        ).grid(row=6, column=0, sticky="ew", pady=4)
 
         info = ctk.CTkLabel(
             container,
@@ -726,7 +735,7 @@ class NetworkToolsApp(ctk.CTk):
 
     def _handle_legacy_backup(self):
         # Handler tombol "Backup Device Config".
-        # Memanggil fungsi run_backup() dari legacy.backup_config.backup.
+        # Display backup progress in GUI instead of terminal.
         if legacy_run_backup is None:
             messagebox.showerror(
                 "Module Not Found",
@@ -735,13 +744,84 @@ class NetworkToolsApp(ctk.CTk):
             )
             return
 
-        def _run():
-            try:
-                legacy_run_backup()
-            except Exception as e:
-                messagebox.showerror("Error", f"Error saat Backup Config:\n{e}")
+        self._clear_main_frame()
 
-        self._run_in_thread(_run)
+        container = ctk.CTkFrame(self.main_frame)
+        container.grid(row=0, column=0, sticky="nsew", padx=24, pady=24)
+        container.grid_columnconfigure(0, weight=1)
+        container.grid_rowconfigure(1, weight=1)
+
+        title = ctk.CTkLabel(
+            container,
+            text="Backup Device Config",
+            font=ctk.CTkFont(size=18, weight="bold"),
+        )
+        title.grid(row=0, column=0, sticky="w", pady=(0, 12))
+
+        # Create a textbox to display backup progress
+        backup_text = ctk.CTkTextbox(container, height=300)
+        backup_text.grid(row=1, column=0, sticky="nsew", pady=(4, 8))
+
+        def run_backup_job():
+            # Disable button while running
+            run_btn.configure(state="disabled")
+            backup_text.delete("1.0", "end")
+            backup_text.insert("end", "Starting backup process...\n")
+
+            def job():
+                try:
+                    # Redirect stdout to capture backup output
+                    import io
+                    import sys
+                    from contextlib import redirect_stdout
+
+                    captured_output = io.StringIO()
+
+                    with redirect_stdout(captured_output):
+                        legacy_run_backup()
+
+                    output = captured_output.getvalue()
+                    
+                    def update_display():
+                        backup_text.delete("1.0", "end")
+                        if output:
+                            backup_text.insert("end", output)
+                        else:
+                            backup_text.insert("end", "Backup completed successfully.\n")
+                        backup_text.insert("end", "\nBackup process finished. Check the backup folder for output.\n")
+                        messagebox.showinfo(
+                            "Done",
+                            "Backup Device Config completed."
+                        )
+
+                    self.after(0, update_display)
+
+                except Exception as e:
+                    def show_error():
+                        backup_text.delete("1.0", "end")
+                        backup_text.insert("end", f"Backup failed:\n{e}\n")
+                        messagebox.showerror("Error", f"Backup failed:\n{e}")
+
+                    self.after(0, show_error)
+
+                finally:
+                    self.after(0, lambda: run_btn.configure(state="normal"))
+
+            self._run_in_thread(job)
+
+        run_btn = ctk.CTkButton(
+            container,
+            text="Run Backup",
+            command=run_backup_job,
+        )
+        run_btn.grid(row=2, column=0, sticky="ew", pady=(4, 4))
+
+        # Back button
+        ctk.CTkButton(
+            container,
+            text="Back to Legacy Menu",
+            command=self.show_legacy_tools,
+        ).grid(row=3, column=0, sticky="ew", pady=(4, 0))
 
     def _handle_legacy_show_inventory(self):
         # Handler tombol "Show Inventory List".
@@ -908,14 +988,247 @@ class NetworkToolsApp(ctk.CTk):
         ).grid(row=4, column=0, sticky="ew", pady=(4, 0))
 
     def _legacy_custom_tool2(self):
-
-        try:
-            messagebox.showinfo(
-                "Custom Tool 2",
-                "TODO: implement or edit this handler to call  function."
+        # GUI integration for Compare Snapshots
+        # Allows user to select two snapshot files and compare them
+        
+        if legacy_compare_snapshots is None:
+            messagebox.showerror(
+                "Module Not Found",
+                "Compare module not available.\nEnsure legacy.lib.compare is importable."
             )
-        except Exception as e:
-            messagebox.showerror("Error", f"Error in Custom Tool 2:\n{e}")
+            return
+
+        # Clear and build page for snapshot comparison
+        self._clear_main_frame()
+
+        container = ctk.CTkFrame(self.main_frame)
+        container.grid(row=0, column=0, sticky="nsew", padx=24, pady=24)
+        container.grid_columnconfigure(0, weight=1)
+        container.grid_rowconfigure(8, weight=1)
+
+        title = ctk.CTkLabel(
+            container,
+            text="Compare Snapshots",
+            font=ctk.CTkFont(size=18, weight="bold"),
+        )
+        title.grid(row=0, column=0, sticky="w", pady=(0, 12))
+
+        # EDITABLE: Default snapshot directory
+        # Change this path if snapshot files are stored in a different location
+        default_snapshot_dir = os.path.join("results", "legacy", "snapshot")
+        
+        # File selection info with directory hint
+        info_label = ctk.CTkLabel(
+            container,
+            text=f"📁 Explorer will open: {default_snapshot_dir}/",
+            font=ctk.CTkFont(size=10),
+            text_color="gray"
+        )
+        info_label.grid(row=1, column=0, sticky="w", pady=(0, 4))
+        
+        note_label = ctk.CTkLabel(
+            container,
+            text="💡 Tip: Edit the directory path above if snapshot files are in a different location",
+            font=ctk.CTkFont(size=9),
+            text_color="gray"
+        )
+        note_label.grid(row=2, column=0, sticky="w", pady=(0, 12))
+
+        # First snapshot file selection
+        ctk.CTkLabel(
+            container,
+            text="First Snapshot File:",
+        ).grid(row=3, column=0, sticky="w")
+
+        file1_frame = ctk.CTkFrame(container)
+        file1_frame.grid(row=4, column=0, sticky="ew", pady=(4, 8))
+        file1_frame.grid_columnconfigure(0, weight=1)
+
+        file1_entry = ctk.CTkEntry(file1_frame, placeholder_text="Select first snapshot JSON file")
+        file1_entry.grid(row=0, column=0, sticky="ew", padx=(0, 8))
+
+        def browse_file1():
+            filename = tk.filedialog.askopenfilename(
+                title="Select First Snapshot File",
+                initialdir=default_snapshot_dir,
+                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            )
+            if filename:
+                file1_entry.delete(0, tk.END)
+                file1_entry.insert(0, filename)
+
+        browse_btn1 = ctk.CTkButton(
+            file1_frame,
+            text="Browse",
+            command=browse_file1,
+            width=100
+        )
+        browse_btn1.grid(row=0, column=1, sticky="ew")
+
+        # Second snapshot file selection
+        ctk.CTkLabel(
+            container,
+            text="Second Snapshot File:",
+        ).grid(row=5, column=0, sticky="w", pady=(12, 0))
+
+        file2_frame = ctk.CTkFrame(container)
+        file2_frame.grid(row=6, column=0, sticky="ew", pady=(4, 12))
+        file2_frame.grid_columnconfigure(0, weight=1)
+
+        file2_entry = ctk.CTkEntry(file2_frame, placeholder_text="Select second snapshot JSON file")
+        file2_entry.grid(row=0, column=0, sticky="ew", padx=(0, 8))
+
+        def browse_file2():
+            filename = tk.filedialog.askopenfilename(
+                title="Select Second Snapshot File",
+                initialdir=default_snapshot_dir,
+                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            )
+            if filename:
+                file2_entry.delete(0, tk.END)
+                file2_entry.insert(0, filename)
+
+        browse_btn2 = ctk.CTkButton(
+            file2_frame,
+            text="Browse",
+            command=browse_file2,
+            width=100
+        )
+        browse_btn2.grid(row=0, column=1, sticky="ew")
+
+        # Result label
+        result_label = ctk.CTkLabel(container, text="Comparison Result:")
+        result_label.grid(row=7, column=0, sticky="w", pady=(12, 4))
+
+        # Result textbox for comparison output
+        result_text = ctk.CTkTextbox(container, height=200)
+        result_text.grid(row=8, column=0, sticky="nsew", pady=(0, 8))
+
+        def run_compare_job():
+            file1 = file1_entry.get().strip()
+            file2 = file2_entry.get().strip()
+
+            if not file1 or not file2:
+                messagebox.showerror("Error", "Both snapshot file paths must be provided.")
+                return
+
+            # Disable button while running
+            run_btn.configure(state="disabled")
+            result_text.delete("1.0", "end")
+            result_text.insert("end", f"Comparing snapshots...\n")
+            result_text.insert("end", f"File 1: {file1}\n")
+            result_text.insert("end", f"File 2: {file2}\n")
+            result_text.insert("end", "-" * 70 + "\n\n")
+
+            def job():
+                try:
+                    # Load devices from inventory
+                    from legacy.lib.utils import load_devices
+                    devices = load_devices()
+                    
+                    # Call the compare function
+                    comparison_result = legacy_compare_snapshots(devices, file1, file2)
+
+                    def update_display():
+                        result_text.delete("1.0", "end")
+                        
+                        if comparison_result is None:
+                            result_text.insert("end", "✅ No changes detected between snapshots.\n")
+                        elif isinstance(comparison_result, dict):
+                            # Display structured comparison results by host
+                            result_text.insert("end", "=== SNAPSHOT COMPARISON RESULTS ===\n\n")
+                            
+                            for host, host_data in comparison_result.items():
+                                result_text.insert("end", f"\n{'=' * 70}\n")
+                                result_text.insert("end", f"Device: {host}\n")
+                                result_text.insert("end", f"{'=' * 70}\n\n")
+                                
+                                # Item Changes
+                                item_changes = host_data.get("item_changes", {})
+                                if item_changes:
+                                    result_text.insert("end", "📝 ITEM CHANGES:\n")
+                                    result_text.insert("end", "-" * 70 + "\n")
+                                    
+                                    for category, changes in item_changes.items():
+                                        if changes:
+                                            result_text.insert("end", f"\n{category.replace('_', ' ').title()}:\n")
+                                            for change in changes:
+                                                result_text.insert("end", f"  • {change.get('item', 'N/A')}\n")
+                                                result_text.insert("end", f"    Type: {change.get('type', 'N/A')}\n")
+                                                result_text.insert("end", f"    Before: {change.get('before', 'N/A')}\n")
+                                                result_text.insert("end", f"    After: {change.get('after', 'N/A')}\n")
+                                    result_text.insert("end", "\n")
+                                
+                                # Added Items
+                                added_items = host_data.get("added_items", {})
+                                if added_items:
+                                    result_text.insert("end", "➕ ADDED ITEMS:\n")
+                                    result_text.insert("end", "-" * 70 + "\n")
+                                    
+                                    for category, items in added_items.items():
+                                        if items:
+                                            result_text.insert("end", f"\n{category.replace('_', ' ').title()}:\n")
+                                            for item in items:
+                                                result_text.insert("end", f"  • {item.get('item', 'N/A')}\n")
+                                                result_text.insert("end", f"    Details: {item.get('details', 'N/A')}\n")
+                                    result_text.insert("end", "\n")
+                                
+                                # Removed Items
+                                removed_items = host_data.get("removed_items", {})
+                                if removed_items:
+                                    result_text.insert("end", "➖ REMOVED ITEMS:\n")
+                                    result_text.insert("end", "-" * 70 + "\n")
+                                    
+                                    for category, items in removed_items.items():
+                                        if items:
+                                            result_text.insert("end", f"\n{category.replace('_', ' ').title()}:\n")
+                                            for item in items:
+                                                result_text.insert("end", f"  • {item.get('item', 'N/A')}\n")
+                                                result_text.insert("end", f"    Details: {item.get('details', 'N/A')}\n")
+                                    result_text.insert("end", "\n")
+                        else:
+                            # If result is a string or other format, just display it
+                            result_text.insert("end", f"{comparison_result}\n")
+                        
+                        messagebox.showinfo("Done", "Snapshot comparison completed.")
+
+                    self.after(0, update_display)
+
+                except FileNotFoundError as e:
+                    def show_error():
+                        result_text.delete("1.0", "end")
+                        result_text.insert("end", f"File not found:\n{e}\n")
+                        messagebox.showerror("Error", f"One or both snapshot files not found:\n{e}")
+                    
+                    self.after(0, show_error)
+
+                except Exception as e:
+                    def show_error():
+                        result_text.delete("1.0", "end")
+                        result_text.insert("end", f"Comparison failed:\n{e}\n")
+                        messagebox.showerror("Error", f"Comparison failed:\n{e}")
+                    
+                    self.after(0, show_error)
+
+                finally:
+                    self.after(0, lambda: run_btn.configure(state="normal"))
+
+            # Run comparison in background thread
+            self._run_in_thread(job)
+
+        run_btn = ctk.CTkButton(
+            container,
+            text="Compare Snapshots",
+            command=run_compare_job,
+        )
+        run_btn.grid(row=9, column=0, sticky="ew", pady=(4, 4))
+
+        # Back button
+        ctk.CTkButton(
+            container,
+            text="Back to Legacy Menu",
+            command=self.show_legacy_tools,
+        ).grid(row=10, column=0, sticky="ew", pady=(4, 0))
 
     def _legacy_custom_tool3(self):
 
@@ -1043,14 +1356,14 @@ class NetworkToolsApp(ctk.CTk):
 
         title = ctk.CTkLabel(
             container,
-            text="IOS-XR Tools",
+            text="SP Tools",
             font=ctk.CTkFont(size=18, weight="bold"),
         )
         title.grid(row=0, column=0, sticky="w", pady=(0, 12))
 
         subtitle = ctk.CTkLabel(
             container,
-            text="Pilih IOS-XR Tools yang ingin dijalankan:",
+            text="Pilih SP Tools yang ingin dijalankan:",
             justify="left",
         )
         subtitle.grid(row=1, column=0, sticky="w", pady=(0, 12))
