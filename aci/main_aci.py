@@ -4,9 +4,7 @@ aci_main.py
 Professional and consistent CLI for Cisco ACI Snapshot Tools
 """
 
-import json
 import getpass
-import glob
 import requests
 from datetime import datetime
 from typing import Tuple, Optional
@@ -55,76 +53,6 @@ def print_header():
     print("🌐  CISCO ACI SNAPSHOT MANAGER".center(60))
     print("=" * 60)
     print()
-
-
-# ============================================================
-# ACI Utility Functions
-# ============================================================
-
-
-def get_credentials() -> Tuple[str, str, str]:
-    """Get APIC credentials from user input, without defaults."""
-
-    # APIC IP
-    while True:
-        apic_ip = input("Enter APIC IP: ").strip()
-        if apic_ip:
-            break
-        print("APIC IP cannot be empty.")
-
-    # Username
-    while True:
-        username = input("Enter Username: ").strip()
-        if username:
-            break
-        print("Username cannot be empty.")
-
-    # Password
-    while True:
-        password = getpass.getpass("Enter Password: ").strip()
-        if password:
-            break
-        print("Password cannot be empty.")
-
-    return apic_ip, username, password
-
-
-def apic_login(
-    apic_ip: str, username: str, password: str
-) -> Optional[RequestsCookieJar]:
-    """Authenticate to APIC and return session cookies."""
-    login_url = f"https://{apic_ip}/api/aaaLogin.json"
-    auth_payload = {"aaaUser": {"attributes": {"name": username, "pwd": password}}}
-
-    try:
-        resp = requests.post(login_url, json=auth_payload, verify=False, timeout=30)
-        if resp.status_code != 200:
-            print(f"✗ Login failed with status code: {resp.status_code}")
-            return None
-
-        data = resp.json()
-        if "imdata" in data and len(data["imdata"]) > 0:
-            if isinstance(data["imdata"][0], dict) and "error" in data["imdata"][0]:
-                print("✗ Authentication failed: Invalid credentials.")
-                return None
-
-        print(f"✓ Successfully authenticated to APIC {apic_ip}")
-        return resp.cookies
-
-    except requests.exceptions.ConnectionError:
-        print(f"✗ Cannot connect to APIC at {apic_ip}")
-    except requests.exceptions.Timeout:
-        print("✗ Connection timeout.")
-    except Exception as e:
-        print(f"✗ Login failed: {str(e)}")
-
-    return None
-
-
-def timestamp_filename(base: str) -> str:
-    """Generate timestamped filename for snapshots."""
-    ts = datetime.now().strftime("%Y-%m-%dT%H-%M")
-    return f"{base}_{ts}.json"
 
 
 # ============================================================

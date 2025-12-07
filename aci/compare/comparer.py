@@ -3,7 +3,6 @@ import json
 import re
 import datetime
 import glob
-from collections import defaultdict
 from rich import print as rprint
 from openpyxl import Workbook
 from openpyxl.styles import Alignment
@@ -200,24 +199,6 @@ def compare_snapshots(file1, file2):
         result[apic]["new_endpoints"] = new_endpoints
         result[apic]["missing_endpoints"] = missing_endpoints
 
-        # before_eps = {
-        #     ep["fvCEp"]["attributes"]["dn"]: ep["fvCEp"]["attributes"].get("ip")
-        #     for ep in before.get("endpoints", [])
-        # }
-        # after_eps = {
-        #     ep["fvCEp"]["attributes"]["dn"]: ep["fvCEp"]["attributes"].get("ip")
-        #     for ep in after.get("endpoints", [])
-        # }
-        # result["new_endpoints"] = sorted(set(after_eps) - set(before_eps))
-        # result["missing_endpoints"] = sorted(set(before_eps) - set(after_eps))
-        # result["moved_endpoints"] = sorted(
-        #     [
-        #         dn
-        #         for dn in set(before_eps) & set(after_eps)
-        #         if before_eps[dn] != after_eps[dn]
-        #     ]
-        # )
-
         # Interface status
         before_intfs = summarize_interfaces(before.get("interfaces", []))
         after_intfs = summarize_interfaces(after.get("interfaces", []))
@@ -232,9 +213,7 @@ def compare_snapshots(file1, file2):
         }
         result[apic]["interface_changes"] = intf_changes
 
-        # Interface Errors
         # NOTE: Interface Errors
-        ## Get interface details
         interfaces_map = {}
         po_map = {}
         interfaces = after.get("interfaces", [])
@@ -768,159 +747,159 @@ def save_to_excel(all_result: dict, filename=None, base_dir=None):
         wb.save(filepath)
 
 
-def save_to_xlsx(result, filename=None, base_dir=None):
-    """
-    Save comparison results to an XLSX file.
-
-    Args:
-        result: The comparison result dictionary
-        filename: Output filename (optional). If not provided, generates a timestamped filename.
-    """
-
-    # Create directory structure
-    if base_dir:
-        compare_dir = os.path.join(base_dir, "compare")
-    else:
-        compare_dir = os.path.join("aci", "results", "compare")
-    os.makedirs(compare_dir, exist_ok=True)
-
-    if filename is None:
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{customer}_comparison_result_{timestamp}.xlsx"
-
-    filepath = os.path.join(compare_dir, filename)
-
-    # Create a new workbook and select the active worksheet
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Comparison Results"  # type: ignore
-
-    # Define styles
-    header_font = Font(bold=True, color="FFFFFF")
-    header_fill = PatternFill(
-        start_color="366092", end_color="366092", fill_type="solid"
-    )
-    category_font = Font(bold=True)
-    category_fill = PatternFill(
-        start_color="D9E1F2", end_color="D9E1F2", fill_type="solid"
-    )
-
-    # Write header
-    ws.append(["Category", "Item", "Details"])  # type: ignore
-
-    # Apply header styles
-    for cell in ws[1]:  # type: ignore
-        cell.font = header_font
-        cell.fill = header_fill
-
-    # Fabric Health
-    fabric_health = result.get("fabric_health", {})
-    ws.append(["Fabric Health", "Before", fabric_health.get("before", "N/A")])  # type: ignore # type: ignore
-    ws.append(["Fabric Health", "After", fabric_health.get("after", "N/A")])  # type: ignore # type: ignore
-
-    # New Faults
-    for fault in result.get("new_faults", []):
-        ws.append(["New Faults", fault, ""])  # type: ignore
-
-    # Cleared Faults
-    for fault in result.get("cleared_faults", []):
-        ws.append(["Cleared Faults", fault, ""])  # type: ignore
-
-    # New Endpoints
-    for ep in result.get("new_endpoints", []):
-        ws.append(["New Endpoints", ep, ""])  # type: ignore # type: ignore
-
-    # Missing Endpoints
-    for ep in result.get("missing_endpoints", []):
-        ws.append(["Missing Endpoints", ep, ""])  # type: ignore
-
-    # Moved Endpoints
-    for ep in result.get("moved_endpoints", []):
-        ws.append(["Moved Endpoints", ep, ""])  # type: ignore # type: ignore
-
-    # Interface Changes - Status Changed
-    intf_changes = result.get("interface_changes", {})
-    for change in intf_changes.get("status_changed", []):
-        ws.append(["Interface Status Changed", change, ""])  # type: ignore
-
-    # Interface Changes - Missing
-    for intf in intf_changes.get("missing", []):
-        ws.append(["Interface Missing", intf, ""])  # type: ignore
-
-    # Interface Changes - New
-    for intf in intf_changes.get("new", []):
-        ws.append(["Interface New", intf, ""])  # type: ignore
-
-    # Interface Error Changes
-    error_changes = result.get("interface_error_changes", {})
-    for dn, change in error_changes.items():
-        ws.append(["Interface Error Changes", dn, change])  # type: ignore
-
-    # CRC Error Changes
-    crc_changes = result.get("crc_error_changes", {})
-    for intf, change in crc_changes.items():
-        ws.append(["CRC Error Changes", str(intf), change])  # type: ignore
-
-    # Drop Error Changes
-    drop_changes = result.get("drop_error_changes", {})
-    for intf, change in drop_changes.items():
-        ws.append(["Drop Error Changes", str(intf), change])  # type: ignore
-
-    # Output Error Changes
-    output_changes = result.get("output_error_changes", {})
-    for intf, change in output_changes.items():
-        ws.append(["Output Error Changes", str(intf), change])  # type: ignore
-
-    # URIB Route Changes
-    route_changes = result.get("urib_route_changes", {})
-    for route in route_changes.get("missing", []):
-        ws.append(["URIB Routes Missing", route, ""])  # type: ignore
-    for route in route_changes.get("new", []):
-        ws.append(["URIB Routes New", route, ""])  # type: ignore
-
-    # Apply category styling and auto-adjust column widths
-    current_row = 2  # Start after header
-    for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=1):  # type: ignore
-        for cell in row:
-            if cell.value and any(
-                category in cell.value
-                for category in [  # type: ignore
-                    "Fabric Health",
-                    "New Faults",
-                    "Cleared Faults",
-                    "New Endpoints",
-                    "Missing Endpoints",
-                    "Moved Endpoints",
-                    "Interface Status Changed",
-                    "Interface Missing",
-                    "Interface New",
-                    "Interface Error Changes",
-                    "CRC Error Changes",
-                    "Drop Error Changes",
-                    "Output Error Changes",
-                    "URIB Routes Missing",
-                    "URIB Routes New",
-                ]
-            ):
-                cell.font = category_font
-                cell.fill = category_fill
-
-    # Auto-adjust column widths
-    for column in ws.columns:  # type: ignore
-        max_length = 0
-        column_letter = column[0].column_letter  # type: ignore
-        for cell in column:
-            try:
-                if len(str(cell.value)) > max_length:
-                    max_length = len(str(cell.value))
-            except Exception:
-                pass
-        adjusted_width = max_length + 2
-        ws.column_dimensions[column_letter].width = adjusted_width  # type: ignore
-
-    # Save the workbook
-    wb.save(filepath)
-    rprint(f"[green]Results saved to {filename}[/green]")
+# def save_to_xlsx(result, filename=None, base_dir=None):
+#     """
+#     Save comparison results to an XLSX file.
+#
+#     Args:
+#         result: The comparison result dictionary
+#         filename: Output filename (optional). If not provided, generates a timestamped filename.
+#     """
+#
+#     # Create directory structure
+#     if base_dir:
+#         compare_dir = os.path.join(base_dir, "compare")
+#     else:
+#         compare_dir = os.path.join("aci", "results", "compare")
+#     os.makedirs(compare_dir, exist_ok=True)
+#
+#     if filename is None:
+#         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+#         filename = f"{customer}_comparison_result_{timestamp}.xlsx"
+#
+#     filepath = os.path.join(compare_dir, filename)
+#
+#     # Create a new workbook and select the active worksheet
+#     wb = Workbook()
+#     ws = wb.active
+#     ws.title = "Comparison Results"  # type: ignore
+#
+#     # Define styles
+#     header_font = Font(bold=True, color="FFFFFF")
+#     header_fill = PatternFill(
+#         start_color="366092", end_color="366092", fill_type="solid"
+#     )
+#     category_font = Font(bold=True)
+#     category_fill = PatternFill(
+#         start_color="D9E1F2", end_color="D9E1F2", fill_type="solid"
+#     )
+#
+#     # Write header
+#     ws.append(["Category", "Item", "Details"])  # type: ignore
+#
+#     # Apply header styles
+#     for cell in ws[1]:  # type: ignore
+#         cell.font = header_font
+#         cell.fill = header_fill
+#
+#     # Fabric Health
+#     fabric_health = result.get("fabric_health", {})
+#     ws.append(["Fabric Health", "Before", fabric_health.get("before", "N/A")])  # type: ignore # type: ignore
+#     ws.append(["Fabric Health", "After", fabric_health.get("after", "N/A")])  # type: ignore # type: ignore
+#
+#     # New Faults
+#     for fault in result.get("new_faults", []):
+#         ws.append(["New Faults", fault, ""])  # type: ignore
+#
+#     # Cleared Faults
+#     for fault in result.get("cleared_faults", []):
+#         ws.append(["Cleared Faults", fault, ""])  # type: ignore
+#
+#     # New Endpoints
+#     for ep in result.get("new_endpoints", []):
+#         ws.append(["New Endpoints", ep, ""])  # type: ignore # type: ignore
+#
+#     # Missing Endpoints
+#     for ep in result.get("missing_endpoints", []):
+#         ws.append(["Missing Endpoints", ep, ""])  # type: ignore
+#
+#     # Moved Endpoints
+#     for ep in result.get("moved_endpoints", []):
+#         ws.append(["Moved Endpoints", ep, ""])  # type: ignore # type: ignore
+#
+#     # Interface Changes - Status Changed
+#     intf_changes = result.get("interface_changes", {})
+#     for change in intf_changes.get("status_changed", []):
+#         ws.append(["Interface Status Changed", change, ""])  # type: ignore
+#
+#     # Interface Changes - Missing
+#     for intf in intf_changes.get("missing", []):
+#         ws.append(["Interface Missing", intf, ""])  # type: ignore
+#
+#     # Interface Changes - New
+#     for intf in intf_changes.get("new", []):
+#         ws.append(["Interface New", intf, ""])  # type: ignore
+#
+#     # Interface Error Changes
+#     error_changes = result.get("interface_error_changes", {})
+#     for dn, change in error_changes.items():
+#         ws.append(["Interface Error Changes", dn, change])  # type: ignore
+#
+#     # CRC Error Changes
+#     crc_changes = result.get("crc_error_changes", {})
+#     for intf, change in crc_changes.items():
+#         ws.append(["CRC Error Changes", str(intf), change])  # type: ignore
+#
+#     # Drop Error Changes
+#     drop_changes = result.get("drop_error_changes", {})
+#     for intf, change in drop_changes.items():
+#         ws.append(["Drop Error Changes", str(intf), change])  # type: ignore
+#
+#     # Output Error Changes
+#     output_changes = result.get("output_error_changes", {})
+#     for intf, change in output_changes.items():
+#         ws.append(["Output Error Changes", str(intf), change])  # type: ignore
+#
+#     # URIB Route Changes
+#     route_changes = result.get("urib_route_changes", {})
+#     for route in route_changes.get("missing", []):
+#         ws.append(["URIB Routes Missing", route, ""])  # type: ignore
+#     for route in route_changes.get("new", []):
+#         ws.append(["URIB Routes New", route, ""])  # type: ignore
+#
+#     # Apply category styling and auto-adjust column widths
+#     current_row = 2  # Start after header
+#     for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=1):  # type: ignore
+#         for cell in row:
+#             if cell.value and any(
+#                 category in cell.value
+#                 for category in [  # type: ignore
+#                     "Fabric Health",
+#                     "New Faults",
+#                     "Cleared Faults",
+#                     "New Endpoints",
+#                     "Missing Endpoints",
+#                     "Moved Endpoints",
+#                     "Interface Status Changed",
+#                     "Interface Missing",
+#                     "Interface New",
+#                     "Interface Error Changes",
+#                     "CRC Error Changes",
+#                     "Drop Error Changes",
+#                     "Output Error Changes",
+#                     "URIB Routes Missing",
+#                     "URIB Routes New",
+#                 ]
+#             ):
+#                 cell.font = category_font
+#                 cell.fill = category_fill
+#
+#     # Auto-adjust column widths
+#     for column in ws.columns:  # type: ignore
+#         max_length = 0
+#         column_letter = column[0].column_letter  # type: ignore
+#         for cell in column:
+#             try:
+#                 if len(str(cell.value)) > max_length:
+#                     max_length = len(str(cell.value))
+#             except Exception:
+#                 pass
+#         adjusted_width = max_length + 2
+#         ws.column_dimensions[column_letter].width = adjusted_width  # type: ignore
+#
+#     # Save the workbook
+#     wb.save(filepath)
+#     rprint(f"[green]Results saved to {filename}[/green]")
 
 
 def compare_select(base_dir):
