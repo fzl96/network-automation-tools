@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import requests
-import json
 from datetime import datetime
 from rich.console import Console
 from rich.table import Table
@@ -11,16 +10,19 @@ from rich import box
 import sys
 import os
 import getpass
-import csv
-from typing import Dict, List, Tuple, Optional, Any
-from requests.cookies import RequestsCookieJar
 import re
+import urllib3
+from typing import Dict, List, Tuple, Optional
+from requests.cookies import RequestsCookieJar
+from openpyxl import Workbook
+from legacy.lib.utils import load_key
+from aci.lib.utils import load_devices
 from legacy.customer_context import get_customer_name
+from cryptography.fernet import Fernet
+
 
 # Suppress SSL warnings
-requests.packages.urllib3.disable_warnings(
-    requests.packages.urllib3.exceptions.InsecureRequestWarning
-)  # type: ignore
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class ACIHealthChecker:
@@ -82,9 +84,18 @@ class ACIHealthChecker:
     def apic_login(
         self, apic_ip: str, username: str, password: str
     ) -> Optional[RequestsCookieJar]:
-        """Authenticate to APIC and return session cookies"""
+        key = load_key()
+        fernet = Fernet(key)
+
         login_url = f"https://{apic_ip}/api/aaaLogin.json"
-        auth_payload = {"aaaUser": {"attributes": {"name": username, "pwd": password}}}
+        auth_payload = {
+            "aaaUser": {
+                "attributes": {
+                    "name": username,
+                    "pwd": fernet.decrypt(password.encode()).decode(),
+                }
+            }
+        }
 
         try:
             resp = requests.post(login_url, json=auth_payload, verify=False, timeout=30)
@@ -1078,7 +1089,8 @@ class ACIHealthChecker:
             self.console = console
 
         @staticmethod
-        def ensure_dir(base_dir=None) -> bool:
+        def ensure_dir(base_dir=None):
+            customer_name = get_customer_name()
             """Ensure directory exists, create if it doesn't
 
             Args:
@@ -1089,17 +1101,165 @@ class ACIHealthChecker:
             """
             try:
                 if base_dir:
-                    path = os.path.join(base_dir, "health_check")
+                    path = os.path.join(base_dir, customer_name, "aci", "health_check")
                 else:
-                    path = os.path.join("aci", "results", "health_check")
+                    path = os.path.join("results", customer_name, "aci", "health_check")
                 os.makedirs(path, exist_ok=True)
-                return os.path.exists(path) and os.path.isdir(path)
+                return os.path.exists(path) and os.path.isdir(path), path
             except OSError as e:
                 print(f"Error creating directory {base_dir}: {e}")
-                return False
+                return False, None
             except Exception as e:
                 print(f"Unexpected error creating directory {base_dir}: {e}")
-                return False
+                return False, None
+
+        def format_uptime(self, raw: str) -> str:
+            if not raw or ":" not in raw:
+                return raw
+            try:
+                days, hours, minutes, rest = raw.split(":", 3)
+                seconds = rest.split(".")[0]
+                days, hours, minutes, seconds = (
+                    int(days),
+                    int(hours),
+                    int(minutes),
+                    int(seconds),
+                )
+                return f"{days}d {hours}h {minutes}m {seconds}s"
+            except Exception:
+                return raw
+
+        def write_site_to_workbook(
+            self,
+            wb: Workbook,
+            site: str,
+            apic_nodes: List[Dict],
+            leaf_spine_nodes: List[Dict],
+            faults: List[Dict],
+            fcs_errors: List[Dict],
+            crc_errors: List[Dict],
+            drop_errors: List[Dict],
+            output_errors: List[Dict],
+        ):
+            """
+            Create 5 sheets in the given workbook for a site, with sorting + friendly formatting.
+            Sheet names are prefixed with the site.
+            """
+            # --- APIC Controllers ---
+            ws = wb.create_sheet(f"{site} - APIC")
+            ws.append(["Hostname", "Serial", "IP", "Mode", "Status", "Health"])
+            if apic_nodes:
+                for node in sorted(apic_nodes, key=lambda x: x.get("name", "")):
+                    ws.append(
+                        [
+                            node.get("name", ""),
+                            node.get("serial", ""),
+                            node.get("ip", ""),
+                            node.get("mode", ""),
+                            node.get("status", ""),
+                            node.get("health_str", ""),
+                        ]
+                    )
+            else:
+                ws.append(["No data available"])
+
+            # --- Leaf/Spine Nodes ---
+            ws = wb.create_sheet(f"{site} - Nodes")
+            ws.append(
+                [
+                    "Hostname",
+                    "Role",
+                    "Serial",
+                    "IP",
+                    "Version",
+                    "Uptime",
+                    "Health",
+                    "CPU",
+                    "Memory",
+                ]
+            )
+            for node in sorted(leaf_spine_nodes, key=lambda x: x.get("name", "")):
+                ws.append(
+                    [
+                        node.get("name", ""),
+                        node.get("role", ""),
+                        node.get("serial", ""),
+                        node.get("ip", ""),
+                        node.get("version", ""),
+                        self.format_uptime(node.get("uptime", "")),
+                        node.get("health", ""),
+                        f"{round(float(node.get('cpu', 0)), 1)}%",
+                        f"{round(float(node.get('memory', 0)), 1)}%",
+                    ]
+                )
+
+            # --- Faults (latest first) ---
+            ws = wb.create_sheet(f"{site} - Faults")
+            ws.append(["Severity", "Code", "Description", "Last Change", "DN"])
+            for fault in sorted(
+                faults, key=lambda x: x.get("last_change", ""), reverse=True
+            ):
+                ws.append(
+                    [
+                        fault.get("severity", ""),
+                        fault.get("code", ""),
+                        fault.get("description", ""),
+                        fault.get("last_change", ""),
+                        fault.get("dn", ""),
+                    ]
+                )
+
+            # --- FCS Errors ---
+            ws = wb.create_sheet(f"{site} - FCS Errors")
+            ws.append(["Node", "Interface", "FCS Errors", "DN"])
+            for err in sorted(fcs_errors, key=lambda x: x.get("node", "")):
+                ws.append(
+                    [
+                        err.get("node", ""),
+                        err.get("interface", ""),
+                        err.get("fcs_errors", 0),
+                        err.get("dn", ""),
+                    ]
+                )
+
+            # --- CRC Errors ---
+            ws = wb.create_sheet(f"{site} - CRC Errors")
+            ws.append(["Node", "Interface", "CRC Errors", "DN"])
+            for err in sorted(crc_errors, key=lambda x: x.get("node", "")):
+                ws.append(
+                    [
+                        err.get("node", ""),
+                        err.get("interface", ""),
+                        err.get("crc_errors", 0),
+                        err.get("dn", ""),
+                    ]
+                )
+
+            # --- Drop Errors ---
+            ws = wb.create_sheet(f"{site} - Drop Errors")
+            ws.append(["Node", "Interface", "Drop Errors", "DN"])
+            for err in sorted(drop_errors, key=lambda x: x.get("node", "")):
+                ws.append(
+                    [
+                        err.get("node", ""),
+                        err.get("interface", ""),
+                        err.get("drop_errors", 0),
+                        err.get("dn", ""),
+                    ]
+                )
+
+            # --- Drop Errors ---
+            ws = wb.create_sheet(f"{site} - Output Errors")
+            ws.append(["Node", "Interface", "Output Errors", "DN"])
+            for err in sorted(output_errors, key=lambda x: x.get("node", "")):
+                ws.append(
+                    [
+                        err.get("node", ""),
+                        err.get("interface", ""),
+                        err.get("output_errors", 0),
+                        err.get("dn", ""),
+                    ]
+                )
 
         def save_report_xlsx(
             self, data_dict: Dict[str, List[Dict]], customer_name, base_dir=None
@@ -1267,142 +1427,162 @@ class ACIHealthChecker:
                 return False
 
     # -------------------- Main Execution -------------------- #
+    #
 
     def run_health_check(self, base_dir=None):
-        """Main function to execute ACI health check"""
-        # Get credentials
-        self.apic_ip, username, password = self.get_credentials()
+        devices = load_devices()
+        customer_name = get_customer_name()
 
+        wb = Workbook()
+        assert wb.active is not None
+        wb.remove(wb.active)
 
-        # Login to APIC
-        self.cookies = self.apic_login(self.apic_ip, username, password)
-        if not self.cookies:
-            sys.exit(1)
+        for apic in devices:
+            hostname = apic.get("hostname", "")
+            apic_ip = apic.get("ip", "")
+            username = apic.get("username", "")
+            password = apic.get("password", "")
 
-        # Initialize components
-        api_client = self.APIClient(self.apic_ip, self.cookies, self.console)
-        data_processor = self.DataProcessor()
-        report_generator = self.ReportGenerator(
-            self.console,
-            self.DEFAULT_HEALTH_THRESHOLD,
-            self.DEFAULT_CPU_MEM_THRESHOLD,
-            self.DEFAULT_INTERFACE_ERROR_THRESHOLD,
-        )
-        data_saver = self.DataSaver(self.console)
+            # Login to APIC
+            self.cookies = self.apic_login(apic_ip, username, password)
+            if not self.cookies:
+                sys.exit(1)
 
-        # Fetch data with progress indication
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            transient=True,
-        ) as progress:
-            progress.add_task(description="Collecting APIC health data...", total=None)
-            apic_raw = api_client.fetch_apic_health()
-
-            progress.add_task(description="Collecting node information...", total=None)
-            top_raw = api_client.fetch_top_system()
-
-            progress.add_task(description="Checking for faults...", total=None)
-            faults_raw = api_client.fetch_faults()
-
-            progress.add_task(description="Collecting CPU/Memory data...", total=None)
-            cpu_raw, mem_raw = api_client.fetch_cpu_mem()
-
-            progress.add_task(description="Checking fabric health...", total=None)
-            fabric_raw = api_client.fetch_fabric_health()
-
-            progress.add_task(description="Checking FCS errors...", total=None)
-            fcs_raw = api_client.fetch_fcs_errors()
-
-            progress.add_task(description="Checking CRC errors...", total=None)
-            crc_raw = api_client.fetch_crc_errors()
-
-            progress.add_task(description="Collecting drop errors...", total=None)
-            drop_raw = api_client.fetch_drop_errors()
-
-            progress.add_task(description="Collecting output errors...", total=None)
-            output_raw = api_client.fetch_output_errors()
-
-        # Process data
-        apic_nodes = data_processor.process_apic_data(apic_raw) if apic_raw else []
-        leaf_spine_nodes = (
-            data_processor.process_leaf_spine(
-                top_raw,
-                cpu_raw if cpu_raw is not None else {},
-                mem_raw if mem_raw is not None else {},
+            # Initialize components
+            api_client = self.APIClient(apic_ip, self.cookies, self.console)
+            data_processor = self.DataProcessor()
+            report_generator = self.ReportGenerator(
+                self.console,
+                self.DEFAULT_HEALTH_THRESHOLD,
+                self.DEFAULT_CPU_MEM_THRESHOLD,
+                self.DEFAULT_INTERFACE_ERROR_THRESHOLD,
             )
-            if top_raw
-            else []
-        )
-        faults = data_processor.process_faults(faults_raw, 20) if faults_raw else []
-        fabric_health = (
-            data_processor.process_fabric_health(fabric_raw) if fabric_raw else 0
-        )
-        fcs_errors = (
-            data_processor.process_fcs_errors(
-                fcs_raw, self.DEFAULT_INTERFACE_ERROR_THRESHOLD
-            )
-            if fcs_raw
-            else []
-        )
-        crc_errors = (
-            data_processor.process_crc_errors(
-                crc_raw, self.DEFAULT_INTERFACE_ERROR_THRESHOLD
-            )
-            if crc_raw
-            else []
-        )
-        drop_errors = (
-            data_processor.process_drop_errors(
-                {"imdata": drop_raw}, self.DEFAULT_INTERFACE_ERROR_THRESHOLD
-            )
-            if drop_raw
-            else []
-        )
-        output_errors = (
-            data_processor.process_output_errors(
-                {"imdata": output_raw}, self.DEFAULT_INTERFACE_ERROR_THRESHOLD
-            )
-            if output_raw
-            else []
-        )
+            data_saver = self.DataSaver(self.console)
 
-        # Generate report
-        report_generator.print_report(
-            apic_nodes,
-            leaf_spine_nodes,
-            faults,
-            fabric_health,
-            fcs_errors,
-            crc_errors,
-            drop_errors,
-            output_errors,
-        )
+            # Fetch data with progress indication
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                transient=True,
+            ) as progress:
+                progress.add_task(
+                    description="Collecting APIC health data...", total=None
+                )
+                apic_raw = api_client.fetch_apic_health()
 
-        # Save data to files
-        data_dict = {
-            "apic_nodes": apic_nodes,
-            "leaf_spine_nodes": leaf_spine_nodes,
-            "faults": faults,
-            "fcs_errors": fcs_errors,
-            "crc_errors": crc_errors,
-            "drop_errors": drop_errors,
-            "output_errors": output_errors,
-        }
-        
-        # EDITABLE AREA: 
-        customer_name = get_customer_name(default="")
+                progress.add_task(
+                    description="Collecting node information...", total=None
+                )
+                top_raw = api_client.fetch_top_system()
 
-        
-        # Save to single XLSX file with multiple sheets
-        data_saver.save_report_xlsx(data_dict, customer_name, base_dir)
+                progress.add_task(description="Checking for faults...", total=None)
+                faults_raw = api_client.fetch_faults()
+
+                progress.add_task(
+                    description="Collecting CPU/Memory data...", total=None
+                )
+                cpu_raw, mem_raw = api_client.fetch_cpu_mem()
+
+                progress.add_task(description="Checking fabric health...", total=None)
+                fabric_raw = api_client.fetch_fabric_health()
+
+                progress.add_task(description="Checking FCS errors...", total=None)
+                fcs_raw = api_client.fetch_fcs_errors()
+
+                progress.add_task(description="Checking CRC errors...", total=None)
+                crc_raw = api_client.fetch_crc_errors()
+
+                progress.add_task(description="Collecting drop errors...", total=None)
+                drop_raw = api_client.fetch_drop_errors()
+
+                progress.add_task(description="Collecting output errors...", total=None)
+                output_raw = api_client.fetch_output_errors()
+
+            # Process data
+            apic_nodes = data_processor.process_apic_data(apic_raw) if apic_raw else []
+            leaf_spine_nodes = (
+                data_processor.process_leaf_spine(
+                    top_raw,
+                    cpu_raw if cpu_raw is not None else {},
+                    mem_raw if mem_raw is not None else {},
+                )
+                if top_raw
+                else []
+            )
+            faults = data_processor.process_faults(faults_raw, 20) if faults_raw else []
+            fabric_health = (
+                data_processor.process_fabric_health(fabric_raw) if fabric_raw else 0
+            )
+            fcs_errors = (
+                data_processor.process_fcs_errors(
+                    fcs_raw, self.DEFAULT_INTERFACE_ERROR_THRESHOLD
+                )
+                if fcs_raw
+                else []
+            )
+            crc_errors = (
+                data_processor.process_crc_errors(
+                    crc_raw, self.DEFAULT_INTERFACE_ERROR_THRESHOLD
+                )
+                if crc_raw
+                else []
+            )
+            drop_errors = (
+                data_processor.process_drop_errors(
+                    {"imdata": drop_raw}, self.DEFAULT_INTERFACE_ERROR_THRESHOLD
+                )
+                if drop_raw
+                else []
+            )
+            output_errors = (
+                data_processor.process_output_errors(
+                    {"imdata": output_raw}, self.DEFAULT_INTERFACE_ERROR_THRESHOLD
+                )
+                if output_raw
+                else []
+            )
+
+            # Generate report
+            report_generator.print_report(
+                apic_nodes,
+                leaf_spine_nodes,
+                faults,
+                fabric_health,
+                fcs_errors,
+                crc_errors,
+                drop_errors,
+                output_errors,
+            )
+
+            data_saver.write_site_to_workbook(
+                wb,
+                hostname,
+                apic_nodes,
+                leaf_spine_nodes,
+                faults,
+                fcs_errors,
+                crc_errors,
+                drop_errors,
+                output_errors,
+            )
+
+            success, path = data_saver.ensure_dir(base_dir)
+
+            if success and path:
+                timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                out_path = os.path.join(
+                    path, f"{customer_name}_ACI_Health_Report_{timestamp}.xlsx"
+                )
+                wb.save(out_path)
+                self.console.print(f"[green]✓ Healthcheck saved to {out_path}[/green]")
+            else:
+                self.console.print("[red]x Healthcheck failed[/red]")
 
 
 def main_healthcheck_aci(base_dir=None):
     """Main entry point."""
     checker = ACIHealthChecker()
     checker.run_health_check(base_dir=base_dir)
-
 
 
 if __name__ == "__main__":
