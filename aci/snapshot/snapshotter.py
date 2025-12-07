@@ -11,7 +11,6 @@ from aci.api.aci_client import (
     get_fabric_health,
     get_faults,
     get_interface_status,
-    get_endpoints,
     get_output_errors,
     get_urib_routes,
     get_interface_errors,
@@ -19,7 +18,12 @@ from aci.api.aci_client import (
     get_output_path_ep,
     get_pc_aggr,
 )
+from aci.lib.utils import load_devices, apic_login
+from rich.console import Console
 from legacy.customer_context import get_customer_name
+
+console = Console()
+
 customer = get_customer_name()
 
 PATH_RE = re.compile(
@@ -88,7 +92,7 @@ def process_endpoints(cookies, apic_ip):
     return endpoints
 
 
-def take_snapshot(cookies, apic_ip, base_filename, base_dir=None):
+def take_snapshot(cookies, apic_ip):
     # Collect all data
     data = {
         "fabric_health": get_fabric_health(cookies, apic_ip),
@@ -104,28 +108,14 @@ def take_snapshot(cookies, apic_ip, base_filename, base_dir=None):
         "pc_aggr": get_pc_aggr(cookies, apic_ip),
     }
 
-    # Create directory structure
-    if base_dir:
-        snapshot_dir = os.path.join(base_dir, "snapshot")
-    else:
-        snapshot_dir = os.path.join("aci", "results", "snapshot")
-
-    os.makedirs(snapshot_dir, exist_ok=True)
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M")
-    filename = f"{customer}_{base_filename}_{apic_ip}_{timestamp}.json"
-    filepath = os.path.join(snapshot_dir, filename)
-    with open(filepath, "w") as f:
-        json.dump(data, f, indent=2)
-    print(f"✅ Snapshot saved to {filepath}")
-    return filepath
+    return data
 
 
 def list_snapshots(base_dir=None):
     if base_dir:
-        folder = os.path.join(base_dir, "snapshot")
+        folder = os.path.join(base_dir, customer, "aci", "snapshot")
     else:
-        folder = os.path.join("aci", "results", "snapshot")
-    print(folder)
+        folder = os.path.join("results", customer, "aci", "snapshot")
 
     if not os.path.exists(folder):
         print("📂 No snapshots taken yet.")
@@ -144,9 +134,9 @@ def list_snapshots(base_dir=None):
 def choose_snapshots(base_dir=None):
     files = list_snapshots(base_dir)
     if base_dir:
-        folder = os.path.join(base_dir, "snapshot")
+        folder = os.path.join(base_dir, customer, "aci", "snapshot")
     else:
-        folder = os.path.join("aci", "results", "snapshot")
+        folder = os.path.join("results", customer, "aci", "snapshot")
 
     if len(files) < 2:
         print("❌ Need at least 2 snapshots to compare.")
@@ -164,3 +154,45 @@ def choose_snapshots(base_dir=None):
     except ValueError:
         print("❌ Please enter valid numbers.")
         return None, None
+
+
+def take_all_snapshots(base_dir=None):
+    devices = load_devices()
+
+    combined = {}
+
+    for device in devices:
+        hostname = device.get("hostname", "")
+        apic_ip = device.get("ip", "")
+        username = device.get("username")
+        password = device.get("password", "")
+
+        if not username or not password or not apic_ip:
+            console.print(
+                f"[red]Skipping {hostname}: credentials not found in .env[/red]"
+            )
+
+        console.rule(f"[bold]{hostname} ({apic_ip})[/bold]")
+
+        cookies = apic_login(apic_ip, username, password)
+
+        if not cookies:
+            console.print(f"[red]Skipping {hostname}: login failed[/red]")
+            continue
+
+        data = take_snapshot(cookies, apic_ip)
+        combined[hostname] = data
+
+    # Create directory structure
+    if base_dir:
+        snapshot_dir = os.path.join(base_dir, customer, "aci", "snapshot")
+    else:
+        snapshot_dir = os.path.join("results", customer, "aci", "snapshot")
+
+    os.makedirs(snapshot_dir, exist_ok=True)
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M")
+    filename = f"{customer}_snapshot_{timestamp}.json"
+    filepath = os.path.join(snapshot_dir, filename)
+    with open(filepath, "w") as f:
+        json.dump(combined, f, indent=2)
+    print(f"✅ Snapshot saved to {filepath}")
