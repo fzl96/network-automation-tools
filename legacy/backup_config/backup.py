@@ -74,6 +74,9 @@ def load_inventory() -> List[Dict[str, str]]:
 
                 name, ip, os_type, username, password = fields
 
+                if "apic" in os_type:
+                    continue
+
                 driver = row[1].strip() if len(row) > 1 else os_type
 
                 devices.append(
@@ -189,7 +192,9 @@ def connect_to_device(device: Dict[str, str]) -> NetworkDriver:
             hostname=ip,
             username=username,
             password=fernet.decrypt(enc_password.encode()).decode(),
+            optional_args={"secret": fernet.decrypt(enc_password.encode()).decode()},
         )
+        print(fernet.decrypt(enc_password.encode()).decode())
         return conn
     except Exception as e:
         # wrap with a more specific message
