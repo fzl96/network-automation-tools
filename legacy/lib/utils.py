@@ -1,3 +1,4 @@
+import json
 import csv
 import os
 import re
@@ -30,6 +31,7 @@ def map_os_to_device_type(os_type: str) -> str:
     mapping = {
         "ios": "cisco_ios",
         "iosxe": "cisco_ios",
+        "nxos_ssh": "cisco_nxos",
         "nxos": "cisco_nxos",
         "eos": "arista_eos",
         "junos": "juniper_junos",
@@ -50,7 +52,7 @@ def connect_to_device(creds):
         "ip": creds["ip"],
         "username": creds["username"],
         "password": fernet.decrypt(creds["password"].encode()).decode(),
-        "secret": creds["password"],
+        "secret": fernet.decrypt(creds["password"].encode()).decode(),
         "fast_cli": False,
     }
 
@@ -86,6 +88,8 @@ def show_version(conn: BaseConnection, device_type: str):
             "uptime": uptime,
             "version": version,
         }
+
+        print(json.dumps(show_ver, indent=2))
 
         return data
     except Exception as e:
@@ -549,6 +553,9 @@ def load_devices(file="inventory.csv"):
                     continue
 
                 hostname, ip, os_type, username, enc_password = row
+
+                if "apic" in os_type:
+                    continue
 
                 device_type = map_os_to_device_type(os_type)
                 devices.append(
