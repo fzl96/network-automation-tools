@@ -220,7 +220,7 @@ def compare_snapshots(devices, file1, file2):
                     result[host]["removed_items"][f"{key}_removed"].append(
                         {
                             "item": f"{arp_details.get('ip_address', '')} - {arp_details.get('mac_address', '')}",
-                            "details": f"Port: {arp_details.get('ports', '')}",
+                            "details": f"Port: {arp_details.get('interface', '')}",
                         }
                     )
 
