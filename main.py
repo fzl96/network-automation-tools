@@ -9,6 +9,7 @@ import os
 import time
 from aci import main_aci
 from legacy import main_legacy
+from sp_tools import main_sp
 
 
 # ============================================================
@@ -49,6 +50,7 @@ def print_menu():
     print("-" * 50)
     print("1. ACI Systems")
     print("2. Legacy Systems")
+    print("3. SP Tools")
     print("q. Exit Program")
     print("-" * 50)
 
@@ -71,6 +73,10 @@ def main():
         elif choice == "2":
             slow_print("\nAccessing Legacy Systems...")
             main_legacy.main()
+
+        elif choice == "3":
+            slow_print("\nAccessing SP Tools...")
+            main_sp.main()
 
         elif choice == "q":
             slow_print("\nExit system...")

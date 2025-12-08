@@ -6,8 +6,12 @@ import os
 from datetime import datetime
 import pandas as pd
 from openpyxl import load_workbook
-from openpyxl.styles import Font, PatternFill, Border, Side
+from openpyxl.styles import Font
 from prettytable import PrettyTable
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+from sp_tools.jumphost import get_jumpserver
+
 
 #### Login to router ####
 
@@ -24,27 +28,7 @@ Version       : 1.0
 """)
 print(banner)
 
-
-#This section imports necessary libraries and defines the connection parameters for the jump server.
-# Function to read username and password from a .txt file
-def read_credentials(file_path):
-    with open(file_path, 'r') as cred_file:
-        lines = cred_file.readlines()
-        username = lines[0].strip()
-        password = lines[1].strip()
-    return username, password
-
-# Retrieve credentials
-username, password = read_credentials('ssh_credentials.txt')
-
-# Define jumpserver configuration
-jumpserver = {
-    "device_type": "terminal_server",
-    "ip": "10.62.170.56",
-    "username": username,
-    "password": password,
-    "port": 22
-}
+jumpserver = get_jumpserver()
 #---------------------------------------------------------------------------------------------------------------------
 
 #---------------------------------------------------------------------------------------------------------------------
