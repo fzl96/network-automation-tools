@@ -5,7 +5,7 @@ import tkinter as tk
 from tkinter import messagebox, filedialog
 from PIL import Image
 import customtkinter as ctk
-
+from datetime import datetime
 # ============================================================
 # Import backend modules 
 # ============================================================
@@ -21,9 +21,6 @@ try:
 except ImportError:
     main_legacy = None # fallback jika tidak ada
 
-#--------------------------------------------
-# Import fungsi-fungsi main_legacy ke GUI #
-#--------------------------------------------
 
 # Import Save Credentials Tools
 try:
@@ -73,6 +70,12 @@ except ImportError:
     legacy_compare_snapshots = None
 
 
+# Import Mantools Online (collect_devices_data) - sama seperti di main_legacy
+try:
+    from legacy.lib.utils import collect_devices_data as legacy_collect_devices_data
+except ImportError:
+    legacy_collect_devices_data = None
+
 # Import fungsi ACI
 try:
     from aci.healthcheck.checklist_aci import main_healthcheck_aci
@@ -81,6 +84,32 @@ except ImportError:
 
 # Notes:
 # - Fungsi ACI (snapshot, compare, dll) belum  dihubungkan
+
+
+# Import ATLAS GUI function
+try:
+    from sp_tools.Atlas_v1.Atlas_10 import run_atlas_gui
+except Exception:
+    run_atlas_gui = None
+
+
+# Import CRCel GUI function
+try:
+    from sp_tools.CRCell_v1.CRC_Cell_15 import run_crc_gui
+except ImportError:
+    run_crc_gui = None
+
+# Import Snipe GUI function
+try:
+    from sp_tools.Snipe_v1.snipe_R import run_snipe_gui
+except ImportError:
+    run_snipe_gui = None
+
+# Import xray GUI function
+try:
+    from sp_tools.Xray_v1.xray_8 import run_xray_gui
+except ImportError:
+    run_xray_gui = None
 
 
 # ============================================================
@@ -1274,22 +1303,19 @@ class NetworkToolsApp(ctk.CTk):
         ).grid(row=10, column=0, sticky="ew", pady=(4, 0))
 
     def _legacy_custom_tool3(self):
-        # Collect MANTOOLS ONLINE File
-        # This integrates with legacy.lib.utils.collect_data_mantools (and related helpers)
-        try:
-            from legacy.lib.utils import load_devices, collect_data_mantools
-        except Exception:
-            load_devices = None
-            collect_data_mantools = None
-
-        if load_devices is None or collect_data_mantools is None:
+        
+        #Collect MANTOOLS ONLINE File (Mantools Online)
+        #----------------------------------------------
+        # Pastikan fungsi backend tersedia
+        if legacy_collect_devices_data is None:
             messagebox.showerror(
                 "Module Not Found",
-                "Required utility functions not available.\nEnsure legacy.lib.utils is importable."
+                "Fungsi collect_devices_data tidak tersedia.\n"
+                "Pastikan legacy.lib.utils dapat di-import."
             )
             return
 
-        # Build UI
+        # Bangun UI halaman Mantools Online
         self._clear_main_frame()
 
         container = ctk.CTkFrame(self.main_frame)
@@ -1306,97 +1332,123 @@ class NetworkToolsApp(ctk.CTk):
 
         info = ctk.CTkLabel(
             container,
-            text="This will collect device data for all devices in inventory.csv and save output files in the results folder.",
+            text=(
+                "This will run the Legacy Mantools Online tool and collect data\n"
+                "for all devices listed in inventory.csv. Output files will be\n"
+                "saved under results/<customer>/legacy/mantools/<date>/."
+            ),
             justify="left",
             font=ctk.CTkFont(size=11),
         )
         info.grid(row=1, column=0, sticky="w", pady=(0, 8))
 
-        # Textbox for progress output
+        # Textbox untuk log / progres
         progress_text = ctk.CTkTextbox(container, height=320)
         progress_text.grid(row=2, column=0, sticky="nsew", pady=(4, 8))
 
         def run_collect_job():
+            # Disable tombol selama job berjalan
             run_btn.configure(state="disabled")
             progress_text.configure(state="normal")
             progress_text.delete("1.0", "end")
-            progress_text.insert("end", "Starting Collect job...\n")
+            progress_text.insert("end", "Starting Mantools Online collect job...\n")
 
             def job():
                 try:
-                    # Load devices
-                    devices = load_devices()
-                    if not devices:
-                        def no_devices():
-                            progress_text.insert("end", "No devices found in inventory.csv.\n")
-                            messagebox.showwarning("No Devices", "No devices found in inventory.csv.")
-                        self.after(0, no_devices)
-                        return
-
-                    # Determine output path similar to collect_devices_data
+                    # Tentukan lokasi output berdasarkan logika di collect_devices_data()
                     try:
                         from legacy.customer_context import get_customer_name
                         customer_name = get_customer_name()
                     except Exception:
                         customer_name = "default"
 
-                    timestamp = __import__("datetime").datetime.now().strftime("%d%m%Y")
-                    out_dir = os.path.join("results", customer_name, "legacy", "mantools", timestamp)
-                    os.makedirs(out_dir, exist_ok=True)
+                    timestamp = datetime.now().strftime("%d%m%Y")
+                    out_dir = os.path.join(
+                        "results",
+                        customer_name,
+                        "legacy",
+                        "mantools",
+                        timestamp,
+                    )
 
-                    for dev in devices:
-                        hostname = dev.get("hostname", "unknown")
-                        ip = dev.get("ip", "")
-                        progress_msg = f"Collecting from {hostname} ({ip})...\n"
+                    # Log rencana folder output sebelum eksekusi
+                    def log_start():
+                        progress_text.insert(
+                            "end",
+                            f"Output directory will be: {out_dir}\n"
+                        )
+                        progress_text.insert(
+                            "end",
+                            "Running legacy collect_devices_data()...\n\n"
+                        )
+                        progress_text.see("end")
+                    self.after(0, log_start)
 
-                        def append(msg=progress_msg):
-                            progress_text.insert("end", msg)
+                    # Panggil backend CLI-style function (sama seperti main_legacy)
+                    try:
+                        # base_dir=None -> sama seperti main_legacy (pakai 'results' default)
+                        legacy_collect_devices_data(None)
+                    except Exception as e:
+                        def on_error():
+                            progress_text.insert(
+                                "end",
+                                f"ERROR while running Mantools Online:\n{e}\n"
+                            )
                             progress_text.see("end")
+                            messagebox.showerror(
+                                "Collect Failed",
+                                f"Collect Mantools Online failed:\n{e}"
+                            )
+                            run_btn.configure(state="normal")
+                        self.after(0, on_error)
+                        return
 
-                        self.after(0, append)
-
-                        # Collect data for this device
-                        try:
-                            data = collect_data_mantools(dev)
-                        except Exception as e:
-                            err = f"  ERROR collecting from {hostname}: {e}\n"
-                            self.after(0, lambda: progress_text.insert("end", err))
-                            continue
-
-                        # Write to file
-                        safe_name = f"{customer_name}___{hostname}___{timestamp}.txt"
-                        out_path = os.path.join(out_dir, safe_name)
-                        try:
-                            with open(out_path, "w", encoding="utf-8") as f:
-                                f.write(data)
-                            self.after(0, lambda p=out_path: progress_text.insert("end", f"  → Saved: {p}\n"))
-                        except Exception as e:
-                            self.after(0, lambda: progress_text.insert("end", f"  ERROR saving file for {hostname}: {e}\n"))
-
-                    def finished():
+                    # Jika sukses
+                    def on_finished():
                         progress_text.insert("end", "\nCollect job completed.\n")
                         progress_text.insert("end", f"Files saved to: {out_dir}\n")
+                        progress_text.see("end")
                         progress_text.configure(state="disabled")
-                        messagebox.showinfo("Done", f"Collect completed. Files saved to:\n{out_dir}")
+                        messagebox.showinfo(
+                            "Collect Completed",
+                            f"Collect Mantools Online completed.\n"
+                            f"Files saved to:\n{out_dir}"
+                        )
                         run_btn.configure(state="normal")
-
-                    self.after(0, finished)
+                    self.after(0, on_finished)
 
                 except Exception as e:
-                    def err_cb():
-                        progress_text.insert("end", f"Fatal error:\n{e}\n")
-                        progress_text.configure(state="disabled")
-                        messagebox.showerror("Error", f"Collect failed:\n{e}")
+                    # Fallback jika ada error tak terduga
+                    def on_unexpected():
+                        progress_text.insert(
+                            "end",
+                            f"Unexpected error while running job:\n{e}\n"
+                        )
+                        progress_text.see("end")
+                        messagebox.showerror(
+                            "Unexpected Error",
+                            f"Unexpected error while running Mantools Online:\n{e}"
+                        )
                         run_btn.configure(state="normal")
-                    self.after(0, err_cb)
+                    self.after(0, on_unexpected)
 
+            # Jalankan di thread terpisah supaya GUI tidak freeze
             self._run_in_thread(job)
 
-        run_btn = ctk.CTkButton(container, text="Run Collect", command=run_collect_job)
+        # Tombol Run Collect
+        run_btn = ctk.CTkButton(
+            container,
+            text="Run Collect",
+            command=run_collect_job,
+        )
         run_btn.grid(row=3, column=0, sticky="ew", pady=(4, 4))
 
-        # Back button
-        ctk.CTkButton(container, text="Back to Legacy Menu", command=self.show_legacy_tools).grid(row=4, column=0, sticky="ew", pady=(4, 0))
+        # Tombol Back
+        ctk.CTkButton(
+            container,
+            text="Back to Legacy Menu",
+            command=self.show_legacy_tools,
+        ).grid(row=4, column=0, sticky="ew", pady=(4, 0))
 
     # ========================================================
     # Halaman ACI Tools (Menampilkan Button ACI Tools)
@@ -1762,7 +1814,263 @@ class NetworkToolsApp(ctk.CTk):
         )
 
     # ========================================================
-    # Halaman IOS-XR Tools 
+    # Halaman SP Tools 
+    # ========================================================
+
+
+    def _sp_tool_atlas(self):
+        # Clear halaman utama
+        self._clear_main_frame()
+
+        frame = ctk.CTkFrame(self.main_frame)
+        frame.grid(row=0, column=0, sticky="nsew", padx=24, pady=24)
+        frame.grid_columnconfigure(0, weight=1)
+
+        title = ctk.CTkLabel(frame, text="ATLAS Tool", font=ctk.CTkFont(size=18, weight="bold"))
+        title.grid(row=0, column=0, sticky="w", pady=(0, 12))
+
+        # Input fields
+        ip_entry = ctk.CTkEntry(frame, placeholder_text="Jumpserver IP")
+        ip_entry.grid(row=1, column=0, sticky="ew", pady=4)
+
+        user_entry = ctk.CTkEntry(frame, placeholder_text="Username")
+        user_entry.grid(row=2, column=0, sticky="ew", pady=4)
+
+        pass_entry = ctk.CTkEntry(frame, placeholder_text="Password", show="*")
+        pass_entry.grid(row=3, column=0, sticky="ew", pady=4)
+
+        port_entry = ctk.CTkEntry(frame, placeholder_text="Port (default 22)")
+        port_entry.grid(row=4, column=0, sticky="ew", pady=4)
+
+        dest_entry = ctk.CTkEntry(frame, placeholder_text="Destination Router (e.g. p-d2-bks)")
+        dest_entry.grid(row=5, column=0, sticky="ew", pady=4)
+
+        destip_entry = ctk.CTkEntry(frame, placeholder_text="Destination IPv4 (for traceroute)")
+        destip_entry.grid(row=6, column=0, sticky="ew", pady=4)
+
+        # Textbox output
+        logbox = ctk.CTkTextbox(frame, height=280)
+        logbox.grid(row=7, column=0, sticky="nsew", pady=8)
+
+        # Run handler
+        def run_job():
+            if run_atlas_gui is None:
+                messagebox.showerror("Error", "Atlas module not found or cannot be imported.")
+                return
+
+            ip = ip_entry.get().strip()
+            username = user_entry.get().strip()
+            password = pass_entry.get().strip()
+            port = port_entry.get().strip() or "22"
+            destination = dest_entry.get().strip()
+            dest_ip = destip_entry.get().strip()
+
+            if not ip or not username or not password or not destination or not dest_ip:
+                messagebox.showwarning("Missing Input", "All fields must be filled!")
+                return
+
+            def job():
+                try:
+                    self.after(0, lambda: logbox.insert("end", "Running ATLAS...\n\n"))
+                    traceroute_output = run_atlas_gui(
+                        ip, username, password, port,
+                        destination=destination,
+                        destination_ip=dest_ip
+                    )
+                    self.after(0, lambda: logbox.insert("end", "\n=== ATLAS COMPLETED ===\n"))
+                    self.after(0, lambda: logbox.insert("end", traceroute_output + "\n"))
+                    self.after(0, lambda: logbox.see("end"))
+                except Exception as e:
+                    self.after(0, lambda: logbox.insert("end", f"\nERROR: {e}\n"))
+                    self.after(0, lambda: logbox.see("end"))
+
+            self._run_in_thread(job)
+
+        # Run button
+        ctk.CTkButton(frame, text="Run ATLAS", command=run_job).grid(row=8, column=0, sticky="ew", pady=6)
+
+        # Back
+        ctk.CTkButton(frame, text="Back", command=self.show_iosxr_tools).grid(row=9, column=0, sticky="ew", pady=4)
+        
+        
+    def _show_sp_tool_page(self, tool_name, run_func):
+        # page builder untuk SP Tools (CRCell, Snipe, Xray)
+        if run_func is None:
+            messagebox.showerror(
+                "Module Not Found",
+                f"Fungsi untuk {tool_name} tidak bisa diimport.\n"
+                "Pastikan modul SP Tools tersedia di sp_tools."
+            )
+            return
+
+        self.active_menu.set("IOS-XR")
+        self._clear_main_frame()
+
+        container = ctk.CTkFrame(self.main_frame)
+        container.grid(row=0, column=0, sticky="nsew", padx=24, pady=24)
+        container.grid_columnconfigure(0, weight=1)
+        # baris log_box yang diberi weight supaya area log bisa menyesuaikan
+        container.grid_rowconfigure(12, weight=1)
+
+        # Judul
+        title = ctk.CTkLabel(
+            container,
+            text=f"{tool_name} SP Tool",
+            font=ctk.CTkFont(size=18, weight="bold"),
+        )
+        title.grid(row=0, column=0, sticky="w", pady=(0, 8))
+
+        subtitle = ctk.CTkLabel(
+            container,
+            text=(
+                f"Masukkan parameter jumpserver dan destination untuk {tool_name}.\n"
+                
+            ),
+            justify="left",
+        )
+        subtitle.grid(row=1, column=0, sticky="w", pady=(0, 12))
+
+        # Jumpserver IP
+        ctk.CTkLabel(container, text="Jumpserver IP:").grid(row=2, column=0, sticky="w")
+        jump_ip_entry = ctk.CTkEntry(container)
+        jump_ip_entry.grid(row=3, column=0, sticky="ew", pady=(0, 8))
+
+        # Username
+        ctk.CTkLabel(container, text="Username:").grid(row=4, column=0, sticky="w")
+        username_entry = ctk.CTkEntry(container)
+        username_entry.grid(row=5, column=0, sticky="ew", pady=(0, 8))
+
+        # Password (masked)
+        ctk.CTkLabel(container, text="Password:").grid(row=6, column=0, sticky="w")
+        password_entry = ctk.CTkEntry(container, show="*")
+        password_entry.grid(row=7, column=0, sticky="ew", pady=(0, 8))
+
+        # Port
+        ctk.CTkLabel(container, text="Port (default 22):").grid(row=8, column=0, sticky="w")
+        port_entry = ctk.CTkEntry(container)
+        port_entry.insert(0, "22")
+        port_entry.grid(row=9, column=0, sticky="ew", pady=(0, 8))
+
+        # Destination router / device
+        ctk.CTkLabel(container, text="Destination (hostname/IP router):").grid(row=10, column=0, sticky="w")
+        dest_entry = ctk.CTkEntry(container)
+        dest_entry.grid(row=11, column=0, sticky="ew", pady=(0, 8))
+
+        # Log output
+        log_box = ctk.CTkTextbox(container, height=220)
+        log_box.grid(row=12, column=0, sticky="nsew", pady=(8, 8))
+
+        def run_clicked():
+            jump_ip = jump_ip_entry.get().strip()
+            username = username_entry.get().strip()
+            password = password_entry.get()
+            port = port_entry.get().strip() or "22"
+            destination = dest_entry.get().strip()
+
+            # Validasi basic – ini yang memunculkan popup "password belum diisi"
+            if not jump_ip or not username or not password or not destination:
+                messagebox.showwarning(
+                    "Missing Input",
+                    "Jumpserver IP, Username, Password, dan Destination harus diisi.",
+                )
+                return
+
+            log_box.configure(state="normal")
+            log_box.delete("1.0", "end")
+            log_box.insert("end", f"Starting {tool_name} job...\n")
+            log_box.see("end")
+
+            def job():
+                import io
+                import sys
+                from contextlib import redirect_stdout
+
+                output = ""
+
+                try:
+                    captured_output = io.StringIO()
+
+                    # Jalankan fungsi backend di dalam redirect_stdout
+                    with redirect_stdout(captured_output):
+                        result = run_func(
+                            jump_ip,
+                            username,
+                            password,
+                            port,
+                            destination=destination,
+                        )
+
+                    # Ambil output dari stdout
+                    output = captured_output.getvalue()
+
+                    # Kalau wrapper mengembalikan string, pakai juga
+                    if not output and isinstance(result, str):
+                        output = result or ""
+
+                except Exception as e:
+                    err_msg = str(e)
+
+                    def err_cb(msg=err_msg):
+                        log_box.configure(state="normal")
+                        log_box.delete("1.0", "end")
+                        log_box.insert("end", f"Error:\n{msg}\n")
+                        log_box.configure(state="disabled")
+                        log_box.see("end")
+                        messagebox.showerror(
+                            "Error",
+                            f"{tool_name} SP Tools failed:\n{msg}",
+                        )
+                        run_btn.configure(state="normal")
+
+                    self.after(0, err_cb)
+                    return
+
+                def finished(text=output):
+                    log_box.configure(state="normal")
+                    log_box.delete("1.0", "end")
+                    if text:
+                        log_box.insert("end", text)
+                    else:
+                        log_box.insert("end", "\n(No output captured)\n")
+                    log_box.configure(state="disabled")
+                    log_box.see("end")
+                    messagebox.showinfo(
+                        f"{tool_name} Completed",
+                        f"{tool_name} job finished.",
+                    )
+                    run_btn.configure(state="normal")
+
+                self.after(0, finished)
+
+            run_btn.configure(state="disabled")
+            self._run_in_thread(job)
+
+        run_btn = ctk.CTkButton(
+            container,
+            text=f"Run {tool_name}",
+            command=run_clicked,
+        )
+        run_btn.grid(row=13, column=0, sticky="ew", pady=(4, 4))
+
+        back_btn = ctk.CTkButton(
+            container,
+            text="Back to SP Tools Menu",
+            command=self.show_iosxr_tools,
+        )
+        back_btn.grid(row=14, column=0, sticky="ew", pady=(4, 0))
+
+    def show_sp_crcell_page(self):
+        self._show_sp_tool_page("CRCell", run_crc_gui)
+
+    def show_sp_snipe_page(self):
+        self._show_sp_tool_page("Snipe", run_snipe_gui)
+
+    def show_sp_xray_page(self):
+        self._show_sp_tool_page("Xray", run_xray_gui)
+
+
+    # ========================================================
+    # Halaman SP Tools 
     # ========================================================
 
     def show_iosxr_tools(self):
@@ -1798,28 +2106,27 @@ class NetworkToolsApp(ctk.CTk):
         
         ctk.CTkButton(
             btn_frame,
-            text="Atlas (TODO: Integrasi GUI)",
-            command=self._handle_aci_snapshot_todo,
+            text="Atlas ",
+            command=self._sp_tool_atlas,
         ).grid(row=1, column=0, sticky="ew", pady=4)
 
         ctk.CTkButton(
             btn_frame,
-            text="CRCell (TODO: Integrasi GUI)",
-            command=self._handle_aci_snapshot_todo,
+            text="CRCell",
+            command=self.show_sp_crcell_page,
         ).grid(row=2, column=0, sticky="ew", pady=4)
 
         ctk.CTkButton(
             btn_frame,
-            text="Snipe (TODO: Integrasi GUI)",
-            command=self._handle_aci_compare_todo,
+            text="Snipe",
+            command=self.show_sp_snipe_page,
         ).grid(row=3, column=0, sticky="ew", pady=4)
 
         ctk.CTkButton(
             btn_frame,
-            text="Xray (TODO: Integrasi GUI)",
-            command=self._handle_aci_compare_todo,
+            text="Xray",
+            command=self.show_sp_xray_page,
         ).grid(row=4, column=0, sticky="ew", pady=4)
-
 
         info = ctk.CTkLabel(
             container,

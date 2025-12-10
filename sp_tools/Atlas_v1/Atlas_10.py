@@ -4,104 +4,29 @@ from netmiko import ConnectHandler, redispatch
 import re
 import sys
 import os
+
+# memastikan root project (/root) ada di sys.path untuk import sp_tools
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 from sp_tools.jumphost import get_jumpserver
 
 
-banner = (f"""
-    
+banner = f"""
  ______________________________________________________________________
 |:..                                                   ''':::::%%%%%%%%|
 |%%%:::::..                      A T L A S                   ''::::%%%%|
 |%%%%%%%:::::.....__________________________________________________:::|
-  
+
 Description   : Automated Traceroute with IP to Hostname Mapping
 Version       : 1.0
 ------------------------------------------------------------------------
 
-""")
-print(banner)
-
-# Membuat dictionary jumpserver
-jumpserver = get_jumpserver()
-#---------------------------------------------------------------------------------------------------------------------
-
-#---------------------------------------------------------------------------------------------------------------------
-# Here, the script connects to the jump server and confirms the connection by printing the prompt.
-# Connect to Jumphost
-print(f"\n{'~'*50}\n1. Connecting to the Jump host\n{'~'*50}")
-net_connect = ConnectHandler(**jumpserver)
-print ("Jump Server Prompt: {}".format(net_connect.find_prompt()))
-print(net_connect.find_prompt())
-print(f"\n{'*'*10}Connected to the Jump host{'*'*10}")
-#---------------------------------------------------------------------------------------------------------------------
-
-#---------------------------------------------------------------------------------------------------------------------
-# This section initiates an SSH connection to the destination router and reads the output.
-# Connect to Router
-print(f"\n{'~'*50}\n2. Connecting to the Dest Router\n{'~'*50}")
-#net_connect.write_channel("telnet p-d2-boo\n")
-destination = input("Enter the destination to connect (e.g: 'p-d2-bks', 'me-d6-sbr-4'): ")
-connection_type = "telnet"
-remote_node = f"{connection_type} {destination}"
-net_connect.write_channel(f"{remote_node}\n")
-time.sleep(3)
-output = net_connect.read_channel()
-print(output)
-#---------------------------------------------------------------------------------------------------------------------
-
-#---------------------------------------------------------------------------------------------------------------------
-# If prompted for a password, the script sends the password and redispatches the connection to the appropriate device type.
-if "username" in output:
-    # Read username and password from a .txt file
-    with open('tacacs_credentials.txt', 'r') as cred_file:
-        lines = cred_file.readlines()
-        router_username = lines[0].strip()
-        router_password = lines[1].strip()
-    
-    # Send username and password to the router
-    net_connect.write_channel(f"{router_username}\n")
-    time.sleep(2)
-    net_connect.write_channel(f"{router_password}\n")
-    print(f"\n{'~'*50}\n3. Destination Device Prompt\n{'~'*50}\n")
-    print(net_connect.find_prompt())
-    print("Router Prompt: {}".format(net_connect.find_prompt()))
-    redispatch(net_connect, device_type="cisco_ios")
-
-# Print timestamp with day
-#print(time.strftime("%a %d-%b-%Y %H:%M:%S WIB", time.localtime()))
+"""
 
 
-
-# ---
-# 6. Mengirim Perintah Traceroute
-# ---
-print(f"\n{'~'*50}\n6. Connected to the Router\n{'~'*50}")
-destination_ip = input("Enter the destination IPv4 for traceroute: ")
-exe_traceroute = f"traceroute mpls ipv4 {destination_ip}/32"
-net_connect.write_channel(f"{exe_traceroute}\n")
-time.sleep(5)
-traceroute_output = net_connect.read_channel()
-print(f"\n{'~'*50}\n7. Traceroute Output\n{'~'*50}")
-print(traceroute_output)
-print("------------------------------------------------------------------------------------------")
-
-# ---
-# 8. Memutuskan Koneksi
-# ---
-print(f"\n{'~'*50}\n8. Disconnecting from the Router\n{'~'*50}")
-net_connect.disconnect()
-print("Connection successfully disconnected.\n")
-
-# ---
-# 9. Fungsi untuk Memuat dan Memproses Pemetaan IP
-# ---
-
+# fungsi util untuk mapping IP -> hostname dari excel
 def find_ips_and_format_output(file_path, ip_list_text):
-    """
-    Searching for a list of IP addresses and formatting the output as requested.
-    """
-    ip_addresses = re.findall(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b', ip_list_text)
+    # cari semua IPv4 di text traceroute
+    ip_addresses = re.findall(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b", ip_list_text)
     unique_ips = list(dict.fromkeys(ip_addresses))
 
     if not unique_ips:
@@ -111,31 +36,34 @@ def find_ips_and_format_output(file_path, ip_list_text):
     print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
     print("9. IP Address to Hostname translation")
     print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-    
+
     try:
         xls = pd.ExcelFile(file_path)
         sheet_names = xls.sheet_names
-        
+
         for target_ip in unique_ips:
             result_found = False
-            
+
             for sheet_name in sheet_names:
                 df = pd.read_excel(xls, sheet_name=sheet_name)
-                
-                if 'IP-Address' in df.columns:
-                    search_result = df[df['IP-Address'].astype(str).str.strip() == target_ip.strip()]
 
-                    
+                if "IP-Address" in df.columns:
+                    search_result = df[df["IP-Address"].astype(str).str.strip() == target_ip.strip()]
+
                     if not search_result.empty:
                         host_name = sheet_name.replace(".csv", "")
-                        interface = search_result['Interface'].iloc[0]
+                        interface = (
+                            search_result["Interface"].iloc[0]
+                            if "Interface" in search_result.columns
+                            else "-"
+                        )
                         print(f"{target_ip} -> {host_name} [{interface}]")
                         result_found = True
-                        break 
-            
+                        break
+
             if not result_found:
                 print(f"{target_ip} -> not found in the database")
-    
+
     except FileNotFoundError:
         print(f"❌ Error: File '{file_path}' not found.")
     except Exception as e:
@@ -145,7 +73,107 @@ def find_ips_and_format_output(file_path, ip_list_text):
     print("10. Finish")
     print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 
-# ---
-# 10. Menjalankan fungsi baru setelah traceroute
-# ---
-find_ips_and_format_output("ip_interface_bank.xlsx", traceroute_output)
+
+# core logic ATLAS; dipakai baik oleh CLI maupun GUI
+def _run_atlas_core(jumpserver, destination, destination_ip):
+    print(banner)
+
+    # 1. connect ke jump host
+    print(f"\n{'~'*50}\n1. Connecting to the Jump host\n{'~'*50}")
+    net_connect = ConnectHandler(**jumpserver)
+    print("Jump Server Prompt: {}".format(net_connect.find_prompt()))
+    print("\n********** Connected to the Jump host **********")
+
+    # 2. connect ke router tujuan via telnet
+    print(f"\n{'~'*50}\n2. Connecting to the Dest Router\n{'~'*50}")
+    connection_type = "telnet"
+    remote_node = f"{connection_type} {destination}"
+    net_connect.write_channel(f"{remote_node}\n")
+    time.sleep(3)
+    output = net_connect.read_channel()
+    print(output)
+
+    # 3. kalau diminta username/password, kirim kredensial TACACS dan redispatch ke cisco_ios
+    if "username" in output.lower():
+        if not os.path.exists("tacacs_credentials.txt"):
+            raise FileNotFoundError("tacacs_credentials.txt tidak ditemukan!")
+
+        with open("tacacs_credentials.txt", "r") as cred_file:
+            lines = cred_file.readlines()
+            router_username = lines[0].strip()
+            router_password = lines[1].strip()
+
+        net_connect.write_channel(f"{router_username}\n")
+        time.sleep(2)
+        net_connect.write_channel(f"{router_password}\n")
+
+        print(f"\n{'~'*50}\n3. Destination Device Prompt\n{'~'*50}\n")
+        print(net_connect.find_prompt())
+        print("Router Prompt: {}".format(net_connect.find_prompt()))
+
+        redispatch(net_connect, device_type="cisco_ios")
+
+    # 6. kirim perintah traceroute
+    print(f"\n{'~'*50}\n6. Connected to the Router\n{'~'*50}")
+    exe_traceroute = f"traceroute mpls ipv4 {destination_ip}/32"
+    net_connect.write_channel(f"{exe_traceroute}\n")
+    time.sleep(5)
+    traceroute_output = net_connect.read_channel()
+
+    print(f"\n{'~'*50}\n7. Traceroute Output\n{'~'*50}")
+    print(traceroute_output)
+    print("-" * 90)
+
+    # 8. disconnect
+    print(f"\n{'~'*50}\n8. Disconnecting from the Router\n{'~'*50}")
+    net_connect.disconnect()
+    print("Connection successfully disconnected.\n")
+
+    # 9-10. translate IP -> hostname
+    find_ips_and_format_output("ip_interface_bank.xlsx", traceroute_output)
+
+    return traceroute_output
+
+
+# fungsi untuk dipakai GUI – semua input berasal dari GUI
+def run_atlas_gui(jump_ip, username, password, port=22, destination=None, destination_ip=None):
+    # normalisasi nilai
+    jump_ip = (jump_ip or "").strip()
+    username = (username or "").strip()
+    password = password or ""
+    destination = (destination or "").strip()
+    destination_ip = (destination_ip or "").strip()
+    port = int(port) if port else 22
+
+    if not jump_ip or not username or not password:
+        raise ValueError("Jumpserver IP / username / password tidak boleh kosong")
+    if not destination:
+        raise ValueError("Destination router tidak boleh kosong")
+    if not destination_ip:
+        raise ValueError("Destination IP untuk traceroute tidak boleh kosong")
+
+    # bentuk dict seperti get_jumpserver()
+    jumpserver = {
+        "device_type": "terminal_server",
+        "ip": jump_ip,
+        "username": username,
+        "password": password,
+        "port": port,
+    }
+
+    return _run_atlas_core(jumpserver, destination, destination_ip)
+
+
+# entrypoint versi CLI – tetap mempertahankan interaksi terminal lama
+def interactive_main():
+    # minta data jumpserver via helper lama
+    jumpserver = get_jumpserver()
+
+    destination = input("Enter the destination to connect (e.g: 'p-d2-bks', 'me-d6-sbr-4'): ").strip()
+    destination_ip = input("Enter the destination IPv4 for traceroute: ").strip()
+
+    return _run_atlas_core(jumpserver, destination, destination_ip)
+
+
+if __name__ == "__main__":
+    interactive_main()
