@@ -1,5 +1,6 @@
 import sys
 import os
+import re
 import threading
 import tkinter as tk
 from tkinter import messagebox, filedialog
@@ -71,10 +72,25 @@ except ImportError:
 
 
 # Import Mantools Online (collect_devices_data) - sama seperti di main_legacy
+# Import with fallback
+legacy_collect_devices_data = None
 try:
-    from legacy.lib.utils import collect_devices_data as legacy_collect_devices_data
-except ImportError:
-    legacy_collect_devices_data = None
+    # line import standard
+    from legacy.lib.utils import collect_devices_data as legacy_collect_devices_data  # type: ignore[attr-defined]
+except Exception:
+    try:
+        # fallback 1
+        from legacy.utils import collect_devices_data as legacy_collect_devices_data  # type: ignore[attr-defined]
+    except Exception:
+        try:
+            # Fallback lain: utils di bawah lib saja
+            from lib.utils import collect_devices_data as legacy_collect_devices_data  # type: ignore[attr-defined]
+        except Exception:
+            try:
+                # Fallback terakhir: utils.py di root project
+                from utils import collect_devices_data as legacy_collect_devices_data  # type: ignore[attr-defined]
+            except Exception:
+                legacy_collect_devices_data = None
 
 # Import fungsi ACI
 try:
@@ -82,8 +98,16 @@ try:
 except ImportError:
     main_healthcheck_aci = None
 
+# Snapshot ACI (ambil dari inventory, sama seperti main_aci.py menu "Take Snapshots")
+try:
+    from aci.snapshot.snapshotter import take_all_snapshots as aci_take_all_snapshots
+except ImportError:
+    aci_take_all_snapshots = None
+
 # Notes:
-# - Fungsi ACI (snapshot, compare, dll) belum  dihubungkan
+# - Fungsi ACI (compare, dll) belum dihubungkan sepenuhnya ke GUI
+
+
 
 
 # Import ATLAS GUI function
@@ -111,6 +135,29 @@ try:
 except ImportError:
     run_xray_gui = None
 
+
+
+
+
+# ============================
+# ANSI Cleaner (untuk Rich logs)
+# ============================
+
+
+ANSI_ESCAPE_PATTERN = re.compile(r'\x1B\[[0-?]*[ -/]*[@-~]')
+
+def clean_ansi(text: str) -> str:
+    """
+    Membersihkan ANSI escape codes (warna, style, progress bar)
+    agar output log tampil normal di GUI (CTkTextbox).
+    """
+    if not text:
+        return text
+    # Hilangkan karakter CR (\r) dari progress bar
+    text = text.replace("\r", "")
+    # Hilangkan semua escape sequence ANSI
+    text = ANSI_ESCAPE_PATTERN.sub("", text)
+    return text
 
 # ============================================================
 # Konfigurasi global 
@@ -351,7 +398,8 @@ class NetworkToolsApp(ctk.CTk):
             text=(
                 "Use Menu in sidebar to select  tools:\n"
                 "- Legacy Tools: inventory, backup config, ect.\n"
-                "- ACI Tools: snapshot, health-check, compare snapshot.\n\n"
+                "- ACI Tools: snapshot, health-check, compare snapshot.\n"
+                "- SP Tools : Atlas, CRCell, Snipe.\n"
             ),
             justify="left",
         )
@@ -807,7 +855,7 @@ class NetworkToolsApp(ctk.CTk):
 
     def _handle_legacy_backup(self):
         # Handler tombol "Backup Device Config".
-        # Display backup progress in GUI instead of terminal.
+        # Menjalankan script backup existing tetapi men-stream output ke textbox GUI.
         if legacy_run_backup is None:
             messagebox.showerror(
                 "Module Not Found",
@@ -830,55 +878,103 @@ class NetworkToolsApp(ctk.CTk):
         )
         title.grid(row=0, column=0, sticky="w", pady=(0, 12))
 
-        # Create a textbox to display backup progress
+        # Textbox untuk menampilkan progres backup
         backup_text = ctk.CTkTextbox(container, height=300)
         backup_text.grid(row=1, column=0, sticky="nsew", pady=(4, 8))
+        backup_text.configure(state="disabled")
 
         def run_backup_job():
-            # Disable button while running
+            # Disable tombol ketika proses berjalan
             run_btn.configure(state="disabled")
+            backup_text.configure(state="normal")
             backup_text.delete("1.0", "end")
-            backup_text.insert("end", "Starting backup process...\n")
+            backup_text.insert("end", "Starting backup process using inventory.csv ...\n")
+            backup_text.insert("end", "Please wait, do not close this window.\n\n")
+            backup_text.see("end")
+            backup_text.configure(state="disabled")
 
             def job():
+                import sys
+                from contextlib import redirect_stdout, redirect_stderr
+
+                # Writer yang men-stream output ke textbox lewat thread utama
+                class GuiStream:
+                    def __init__(self, textbox, app):
+                        self.textbox = textbox
+                        self.app = app
+
+                    def write(self, s):
+                        if not s:
+                            return
+
+                        def append(text=s):
+                            try:
+                                self.textbox.configure(state="normal")
+                                self.textbox.insert("end", text)
+                                self.textbox.see("end")
+                                self.textbox.configure(state="disabled")
+                            except Exception:
+                                # Jangan sampai GUI crash hanya karena log
+                                pass
+
+                        self.app.after(0, append)
+
+                    def flush(self):
+                        # Diperlukan agar kompatibel dengan file-like object
+                        return
+
+                stream = GuiStream(backup_text, self)
+
+                # Hindari sys.exit() di script lama menutup seluruh aplikasi
+                original_exit = sys.exit
+                def fake_exit(code=0):
+                    raise RuntimeError(f"sys.exit({code}) called in legacy_run_backup")
+                sys.exit = fake_exit
+
                 try:
-                    # Redirect stdout to capture backup output
-                    import io
-                    import sys
-                    from contextlib import redirect_stdout
-
-                    captured_output = io.StringIO()
-
-                    with redirect_stdout(captured_output):
+                    # Stream semua stdout/stderr script backup ke textbox
+                    with redirect_stdout(stream), redirect_stderr(stream):
                         legacy_run_backup()
 
-                    output = captured_output.getvalue()
-                    
-                    def update_display():
-                        backup_text.delete("1.0", "end")
-                        if output:
-                            backup_text.insert("end", output)
-                        else:
-                            backup_text.insert("end", "Backup completed successfully.\n")
-                        backup_text.insert("end", "\nBackup process finished. Check the backup folder for output.\n")
+                    def on_done():
+                        try:
+                            backup_text.configure(state="normal")
+                            backup_text.insert("end", "\nBackup process finished.\n")
+                            backup_text.insert(
+                                "end",
+                                "Please check the backup output folder for generated configs.\n"
+                            )
+                            backup_text.see("end")
+                            backup_text.configure(state="disabled")
+                        except Exception:
+                            pass
                         messagebox.showinfo(
                             "Done",
                             "Backup Device Config completed."
                         )
+                        run_btn.configure(state="normal")
 
-                    self.after(0, update_display)
+                    self.after(0, on_done)
 
                 except Exception as e:
                     def show_error():
-                        backup_text.delete("1.0", "end")
-                        backup_text.insert("end", f"Backup failed:\n{e}\n")
+                        try:
+                            backup_text.configure(state="normal")
+                            backup_text.insert("end", f"Backup failed:\n{e}\n")
+                            backup_text.see("end")
+                            backup_text.configure(state="disabled")
+                        except Exception:
+                            pass
                         messagebox.showerror("Error", f"Backup failed:\n{e}")
+                        run_btn.configure(state="normal")
 
                     self.after(0, show_error)
 
                 finally:
-                    self.after(0, lambda: run_btn.configure(state="normal"))
+                    # Kembalikan sys.exit ke fungsi asli
+                    sys.exit = original_exit
 
+            # Jalankan proses backup di thread terpisah
             self._run_in_thread(job)
 
         run_btn = ctk.CTkButton(
@@ -888,12 +984,13 @@ class NetworkToolsApp(ctk.CTk):
         )
         run_btn.grid(row=2, column=0, sticky="ew", pady=(4, 4))
 
-        # Back button
+        # Tombol kembali
         ctk.CTkButton(
             container,
             text="Back to Legacy Menu",
             command=self.show_legacy_tools,
         ).grid(row=3, column=0, sticky="ew", pady=(4, 0))
+
 
     def _handle_legacy_show_inventory(self):
         # Handler tombol "Show Inventory List".
@@ -1492,18 +1589,22 @@ class NetworkToolsApp(ctk.CTk):
             command=self._handle_aci_healthcheck,
         ).grid(row=1, column=0, sticky="ew", pady=4)
 
-        # Tombol (Snapshot, Compare, dll) masih Oncheck integrasi penuh ke GUI
+        
+        # Tombol untuk menjalankan ACI Snapshot (inventory-based)
         ctk.CTkButton(
             btn_frame,
-            text="Take Snapshot (TODO: Integrasi GUI)",
-            command=self._handle_aci_snapshot_todo,
+            text="Take Snapshot",
+            command=self._handle_aci_snapshot,
         ).grid(row=2, column=0, sticky="ew", pady=4)
 
+
+        # Tombol Compare Snapshots ACI (sudah terintegrasi GUI)
         ctk.CTkButton(
             btn_frame,
-            text="Compare Snapshots (TODO: Integrasi GUI)",
-            command=self._handle_aci_compare_todo,
+            text="Compare Snapshots",
+            command=self._handle_aci_compare,
         ).grid(row=3, column=0, sticky="ew", pady=4)
+
 
         info = ctk.CTkLabel(
             container,
@@ -1518,20 +1619,174 @@ class NetworkToolsApp(ctk.CTk):
     # ========================================================
 
     def _handle_aci_healthcheck(self):
-        # Handler tombol "Run ACI Health Check".
-        # Memanggil main_healthcheck_aci() dari aci.healthcheck.checklist_aci.
-        # Catatan: fungsi ini masih memakai input CLI (APIC, user, dll). Pelu Integrasi
-        try:
-            from aci.healthcheck.checklist_aci import ACIHealthChecker
-        except Exception:
+        """
+        Handler untuk tombol "Run ACI Health Check".
+
+        Versi baru healthcheck (checklist_aci.py) sudah tidak membutuhkan input
+        IP / username / password APIC dari user. Script akan otomatis membaca
+        inventory dan context customer, lalu menyimpan hasil ke folder results.
+
+        GUI ini hanya:
+        - Menjalankan main_healthcheck_aci() di background thread
+        - Men-stream log stdout/stderr ke textbox
+        - Tidak membekukan GUI
+        """
+        # Pastikan fungsi backend tersedia
+        if main_healthcheck_aci is None:
             messagebox.showerror(
                 "Module Not Found",
-                "Fungsi 'ACIHealthChecker' tidak bisa diimport.\n"
-                "Cek modul aci.healthcheck.checklist_aci.",
+                "Fungsi 'main_healthcheck_aci' tidak bisa diimport.\n"
+                "Pastikan modul aci.healthcheck.checklist_aci dapat diakses."
             )
             return
 
-        # Build UI for ACI Health Check parameters
+        self.active_menu.set("aci")
+        self._clear_main_frame()
+
+        container = ctk.CTkFrame(self.main_frame)
+        container.grid(row=0, column=0, sticky="nsew", padx=24, pady=24)
+        container.grid_columnconfigure(0, weight=1)
+        container.grid_rowconfigure(4, weight=1)  # baris log box bisa grow
+
+        # Judul
+        title = ctk.CTkLabel(
+            container,
+            text="ACI Tools - Run ACI Health Check",
+            font=ctk.CTkFont(size=18, weight="bold"),
+        )
+        title.grid(row=0, column=0, sticky="w", pady=(0, 8))
+
+        # Deskripsi singkat
+        desc = ctk.CTkLabel(
+            container,
+            text=(
+                "Menjalankan ACI Health Check berbasis data di inventory.\n"
+                "- Hasil report akan tersimpan otomatis di folder results/... \n"
+                "- Log eksekusi akan tampil di bawah ini"
+            ),
+            justify="left",
+        )
+        desc.grid(row=1, column=0, sticky="w")
+
+        # Area log output
+        log_box = ctk.CTkTextbox(container, height=260)
+        log_box.grid(row=4, column=0, sticky="nsew", pady=(8, 4))
+        log_box.configure(state="disabled")
+
+        # Frame tombol
+        btn_frame = ctk.CTkFrame(container, fg_color="transparent")
+        btn_frame.grid(row=5, column=0, sticky="ew", pady=(8, 0))
+        btn_frame.grid_columnconfigure((0, 1), weight=1)
+
+        run_btn = ctk.CTkButton(btn_frame, text="Run Health Check")
+        run_btn.grid(row=0, column=0, sticky="ew", padx=(0, 4))
+
+        back_btn = ctk.CTkButton(
+            btn_frame,
+            text="Back to ACI Menu",
+            command=self.show_aci_tools,
+        )
+        back_btn.grid(row=0, column=1, sticky="ew", padx=(4, 0))
+
+        # ------------------- Worker & logging ------------------- #
+
+        def append_log(text: str):
+            if not text:
+                return
+
+            def _append():
+                try:
+                    log_box.configure(state="normal")
+                    log_box.insert("end", text)
+                    log_box.see("end")
+                    log_box.configure(state="disabled")
+                except Exception:
+                    # Jangan sampai GUI crash hanya karena gagal update log
+                    pass
+
+            self.after(0, _append)
+
+        def run_job():
+            # Disable tombol saat running
+            run_btn.configure(state="disabled")
+            back_btn.configure(state="disabled")
+
+            # Clear log dan tulis header
+            log_box.configure(state="normal")
+            log_box.delete("1.0", "end")
+            log_box.insert(
+                "end",
+                "=== Starting ACI Health Check ===\n"
+                "Please wait, capture helathcheck on progress...\n\n",
+            )
+            log_box.configure(state="disabled")
+            log_box.see("end")
+
+            def worker():
+                try:
+                    from contextlib import redirect_stdout, redirect_stderr
+
+                    class GuiStream:
+                        def write(self_inner, s):
+                            append_log(clean_ansi(s))
+
+                        def flush(self_inner):
+                            pass
+
+                    stream = GuiStream()
+
+                    # Redirect semua stdout/stderr backend ke textbox
+                    with redirect_stdout(stream), redirect_stderr(stream):
+                        # CLI main_aci juga memanggil dengan base_dir=None,
+                        # sehingga struktur folder hasil tetap konsisten.
+                        main_healthcheck_aci(base_dir=None)
+
+                    append_log("\n=== ACI Health Check selesai ===\n")
+
+                    def on_done():
+                        run_btn.configure(state="normal")
+                        back_btn.configure(state="normal")
+
+                    self.after(0, on_done)
+
+                except Exception as e:
+                    def on_error():
+                        append_log(f"\nError: {e}\n")
+                        messagebox.showerror(
+                            "Error",
+                            f"ACI Health Check gagal dijalankan:\n{e}",
+                        )
+                        run_btn.configure(state="normal")
+                        back_btn.configure(state="normal")
+
+                    self.after(0, on_error)
+
+            # Jalankan worker di background thread supaya GUI tidak freeze
+            self._run_in_thread(worker)
+
+        # Set command tombol setelah fungsi didefinisikan
+        run_btn.configure(command=run_job)
+
+
+    def _handle_aci_snapshot(self):
+        """
+        Handler tombol "Take Snapshot (Inventory)" untuk ACI.
+
+        Flow:
+        - Tidak minta IP / username / password APIC (semua diambil dari inventory seperti di main_aci.py)
+        - Jalankan take_all_snapshots() di background thread
+        - Semua output (print / log) ditampilkan di textbox GUI secara live
+        """
+        if aci_take_all_snapshots is None:
+            messagebox.showerror(
+                "Module Not Found",
+                "Fungsi 'take_all_snapshots' tidak bisa diimport.\n"
+                "Cek modul aci.snapshot.snapshotter."
+            )
+            return
+
+        # Bangun halaman khusus "Take Snapshot"
+        self.active_menu.set("aci")
         self._clear_main_frame()
 
         container = ctk.CTkFrame(self.main_frame)
@@ -1541,277 +1796,404 @@ class NetworkToolsApp(ctk.CTk):
 
         title = ctk.CTkLabel(
             container,
-            text="Run ACI Health Check",
+            text="ACI - Take Snapshot (Inventory)",
+            font=ctk.CTkFont(size=18, weight="bold"),
+        )
+        title.grid(row=0, column=0, sticky="w", pady=(0, 8))
+
+        subtitle = ctk.CTkLabel(
+            container,
+            text=(
+                "Menjalankan Snapshot berbasis data di inventory \n"
+                "Hasil report akan tersimpan otomatis di folder results/... \n"
+                "Output console akan muncul di bawah ini."
+            ),
+            justify="left",
+            font=ctk.CTkFont(size=11),
+        )
+        subtitle.grid(row=1, column=0, sticky="w", pady=(0, 8))
+
+
+        # Frame output + scrollbar
+        out_frame = ctk.CTkFrame(container)
+        out_frame.grid(row=3, column=0, sticky="nsew", pady=(4, 8))
+        out_frame.grid_columnconfigure(0, weight=1)
+        out_frame.grid_rowconfigure(0, weight=1)
+
+        output_text = ctk.CTkTextbox(out_frame, height=200)
+        output_text.grid(row=0, column=0, sticky="nsew")
+
+        try:
+            scrollbar = ctk.CTkScrollbar(
+                out_frame,
+                orientation="vertical",
+                command=output_text.yview,
+            )
+            scrollbar.grid(row=0, column=1, sticky="ns", padx=(6, 0))
+            output_text.configure(yscrollcommand=scrollbar.set)
+        except Exception:
+            # Kalau CTkScrollbar tidak tersedia, lanjut tanpa scrollbar
+            pass
+
+        # Tombol Run dan Back
+        def run_snapshot():
+            run_btn.configure(state="disabled")
+            output_text.configure(state="normal")
+            output_text.delete("1.0", "end")
+            output_text.insert("end", "Starting ACI Snapshot (inventory-based)...\n")
+            output_text.configure(state="disabled")
+
+            def worker():
+                from contextlib import redirect_stdout, redirect_stderr
+
+                # Writer yang langsung append ke textbox via self.after
+                class GuiStream:
+                    def __init__(self, textbox, app):
+                        self.textbox = textbox
+                        self.app = app
+
+                    def write(self, s):
+                        if not s:
+                            return
+
+                        cleaned = clean_ansi(s)
+
+                        def append(text=cleaned):
+                            try:
+                                self.textbox.configure(state="normal")
+                                self.textbox.insert("end", text)
+                                self.textbox.see("end")
+                                self.textbox.configure(state="disabled")
+                            except Exception:
+                                pass
+
+                        # Jalankan update di main thread
+                        self.app.after(0, append)
+
+                    def flush(self):
+                        return
+
+                stream = GuiStream(output_text, self)
+
+                # Protect sys.exit di dalam script backend (kalau dipanggil)
+                orig_exit = sys.exit
+
+                def fake_exit(code=0):
+                    raise RuntimeError(f"sys.exit({code}) called")
+
+                sys.exit = fake_exit
+
+                try:
+                    # Redirect semua print() / error ke GuiStream
+                    with redirect_stdout(stream), redirect_stderr(stream):
+                        # base_dir=None sesuai behavior CLI main_aci.py
+                        aci_take_all_snapshots(base_dir=None)
+
+                except Exception as e:
+                    err_msg = str(e)
+
+                    def err_cb(msg=err_msg):
+                        messagebox.showerror(
+                            "Snapshot Error",
+                            f"ACI Snapshot gagal:\n{msg}",
+                        )
+
+                    self.after(0, err_cb)
+
+                finally:
+                    # Kembalikan sys.exit seperti semula
+                    sys.exit = orig_exit
+
+                    def done_cb():
+                        try:
+                            output_text.configure(state="disabled")
+                        except Exception:
+                            pass
+                        run_btn.configure(state="normal")
+                        # Optional popup selesai (supaya user tahu run sudah beres)
+                        messagebox.showinfo(
+                            "Done",
+                            "ACI Snapshot selesai.\nLihat output di kotak log dan file hasil di folder results.",
+                        )
+
+                    self.after(0, done_cb)
+
+            # Jalankan worker di background thread supaya GUI tidak freeze
+            self._run_in_thread(worker)
+
+        run_btn = ctk.CTkButton(
+            container,
+            text="Run Snapshot",
+            command=run_snapshot,
+        )
+        run_btn.grid(row=4, column=0, sticky="ew", pady=(4, 4))
+
+        back_btn = ctk.CTkButton(
+            container,
+            text="Back to ACI Menu",
+            command=self.show_aci_tools,
+        )
+        back_btn.grid(row=5, column=0, sticky="ew", pady=(4, 0))
+
+
+    def _handle_aci_compare(self):
+        """
+        GUI handler untuk menu "ACI Tools" → "Compare Snapshots".
+
+        Flow:
+        - User pilih 2 file snapshot ACI (*.json) lewat file dialog.
+        - Jalankan aci.compare.comparer.compare_snapshots(file1, file2) di background thread.
+        - Simpan hasil detail ke Excel via save_to_excel().
+        - Tampilkan ringkasan hasil + path file Excel di textbox GUI.
+        """
+        try:
+            from aci.compare.comparer import compare_snapshots, save_to_excel
+            from legacy.customer_context import get_customer_name
+        except Exception as e:
+            messagebox.showerror(
+                "Module Not Found",
+                "Gagal mengimport modul compare ACI.\n"
+                "Pastikan 'aci.compare.comparer' dan 'legacy.customer_context' "
+                "bisa diimport.\n"
+                f"Error: {e}",
+            )
+            return
+
+        # Tentukan nama customer & default folder snapshot ACI
+        try:
+            customer_name = get_customer_name()
+        except Exception:
+            customer_name = "default"
+
+        default_snapshot_dir = os.path.join("results", customer_name, "aci", "snapshot")
+
+        # Build halaman GUI (mirip Legacy → Compare Snapshots)
+        self._clear_main_frame()
+
+        container = ctk.CTkFrame(self.main_frame)
+        container.grid(row=0, column=0, sticky="nsew", padx=24, pady=24)
+        container.grid_columnconfigure(0, weight=1)
+        container.grid_rowconfigure(8, weight=1)
+
+        title = ctk.CTkLabel(
+            container,
+            text="ACI - Compare Snapshots",
             font=ctk.CTkFont(size=18, weight="bold"),
         )
         title.grid(row=0, column=0, sticky="w", pady=(0, 12))
 
-        # Create a temporary instance to read default values
-        try:
-            tmp = ACIHealthChecker()
-            def_apic = tmp.DEFAULT_APIC_IP
-            def_user = tmp.DEFAULT_USERNAME
-            def_pass = tmp.DEFAULT_PASSWORD
-            def_health = tmp.DEFAULT_HEALTH_THRESHOLD
-            def_cpu = tmp.DEFAULT_CPU_MEM_THRESHOLD
-            def_interface = tmp.DEFAULT_INTERFACE_ERROR_THRESHOLD
-        except Exception:
-            def_apic = ""
-            def_user = ""
-            def_pass = ""
-            def_health = 90
-            def_cpu = 75
-            def_interface = 0
+        info_label = ctk.CTkLabel(
+            container,
+            text=f"📁 Explorer akan dibuka pada folder: {default_snapshot_dir}",
+            font=ctk.CTkFont(size=10),
+            text_color="gray",
+        )
+        info_label.grid(row=1, column=0, sticky="w", pady=(0, 4))
 
-        # APIC IP
-        ctk.CTkLabel(container, text="APIC IP:").grid(row=1, column=0, sticky="w")
-        apic_entry = ctk.CTkEntry(container)
-        apic_entry.insert(0, def_apic)
-        apic_entry.grid(row=2, column=0, sticky="ew", pady=(4, 8))
+        note_label = ctk.CTkLabel(
+            container,
+            text="Pilih dua file snapshot ACI (*.json) yang ingin dibandingkan.",
+            font=ctk.CTkFont(size=10),
+        )
+        note_label.grid(row=2, column=0, sticky="w", pady=(0, 12))
 
-        # Username
-        ctk.CTkLabel(container, text="Username:").grid(row=3, column=0, sticky="w")
-        user_entry = ctk.CTkEntry(container)
-        user_entry.insert(0, def_user)
-        user_entry.grid(row=4, column=0, sticky="ew", pady=(4, 8))
+        # ============================
+        # File snapshot pertama
+        # ============================
+        ctk.CTkLabel(
+            container,
+            text="Snapshot pertama:",
+        ).grid(row=3, column=0, sticky="w")
 
-        # Password
-        ctk.CTkLabel(container, text="Password:").grid(row=5, column=0, sticky="w")
-        pass_entry = ctk.CTkEntry(container, show="*")
-        pass_entry.insert(0, def_pass)
-        pass_entry.grid(row=6, column=0, sticky="ew", pady=(4, 8))
+        file1_frame = ctk.CTkFrame(container)
+        file1_frame.grid(row=4, column=0, sticky="ew", pady=(4, 8))
+        file1_frame.grid_columnconfigure(0, weight=1)
 
-        # Thresholds frame
-        thr_frame = ctk.CTkFrame(container)
-        thr_frame.grid(row=7, column=0, sticky="ew", pady=(8, 4))
-        thr_frame.grid_columnconfigure((0,1,2), weight=1)
+        file1_entry = ctk.CTkEntry(
+            file1_frame,
+            placeholder_text="Pilih file snapshot pertama (.json)",
+        )
+        file1_entry.grid(row=0, column=0, sticky="ew", padx=(0, 8))
 
-        ctk.CTkLabel(thr_frame, text="Health %").grid(row=0, column=0, sticky="w")
-        health_entry = ctk.CTkEntry(thr_frame, width=60)
-        health_entry.insert(0, str(def_health))
-        health_entry.grid(row=1, column=0, sticky="ew", padx=4)
+        def browse_file1():
+            filename = tk.filedialog.askopenfilename(
+                title="Select first ACI snapshot",
+                initialdir=default_snapshot_dir,
+                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            )
+            if filename:
+                file1_entry.delete(0, tk.END)
+                file1_entry.insert(0, filename)
 
-        ctk.CTkLabel(thr_frame, text="CPU/Mem %").grid(row=0, column=1, sticky="w")
-        cpu_entry = ctk.CTkEntry(thr_frame, width=60)
-        cpu_entry.insert(0, str(def_cpu))
-        cpu_entry.grid(row=1, column=1, sticky="ew", padx=4)
+        browse_btn1 = ctk.CTkButton(
+            file1_frame,
+            text="Browse",
+            command=browse_file1,
+            width=100,
+        )
+        browse_btn1.grid(row=0, column=1, sticky="ew")
 
-        ctk.CTkLabel(thr_frame, text="Interface Err Threshold").grid(row=0, column=2, sticky="w")
-        intf_entry = ctk.CTkEntry(thr_frame, width=60)
-        intf_entry.insert(0, str(def_interface))
-        intf_entry.grid(row=1, column=2, sticky="ew", padx=4)
+        # ============================
+        # File snapshot kedua
+        # ============================
+        ctk.CTkLabel(
+            container,
+            text="Snapshot kedua:",
+        ).grid(row=5, column=0, sticky="w", pady=(8, 0))
 
-        # Small helper note next to thresholds
-        note_lbl = ctk.CTkLabel(container, text="Please Adjust thresholds before run", font=ctk.CTkFont(size=12), text_color="gray")
-        note_lbl.grid(row=8, column=0, sticky="w", pady=(4, 4))
+        file2_frame = ctk.CTkFrame(container)
+        file2_frame.grid(row=6, column=0, sticky="ew", pady=(4, 8))
+        file2_frame.grid_columnconfigure(0, weight=1)
 
-        # Output area with a vertical scrollbar and reduced height so Run button stays visible
-        out_frame = ctk.CTkFrame(container)
-        out_frame.grid(row=9, column=0, sticky="nsew", pady=(4, 8))
-        out_frame.grid_columnconfigure(0, weight=1)
-        out_frame.grid_rowconfigure(0, weight=1)
+        file2_entry = ctk.CTkEntry(
+            file2_frame,
+            placeholder_text="Pilih file snapshot kedua (.json)",
+        )
+        file2_entry.grid(row=0, column=0, sticky="ew", padx=(0, 8))
 
-        output_text = ctk.CTkTextbox(out_frame, height=160)
-        output_text.grid(row=0, column=0, sticky="nsew")
+        def browse_file2():
+            filename = tk.filedialog.askopenfilename(
+                title="Select second ACI snapshot",
+                initialdir=default_snapshot_dir,
+                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            )
+            if filename:
+                file2_entry.delete(0, tk.END)
+                file2_entry.insert(0, filename)
 
-        # Add a vertical scrollbar bound to the textbox
-        try:
-            scrollbar = ctk.CTkScrollbar(out_frame, orientation="vertical", command=output_text.yview)
-            scrollbar.grid(row=0, column=1, sticky="ns", padx=(6,0))
-            output_text.configure(yscrollcommand=scrollbar.set)
-        except Exception:
-            # If customtkinter scrollbar is not available, fall back silently
-            pass
+        browse_btn2 = ctk.CTkButton(
+            file2_frame,
+            text="Browse",
+            command=browse_file2,
+            width=100,
+        )
+        browse_btn2.grid(row=0, column=1, sticky="ew")
 
-        def run_job():
+        # ============================
+        # Textbox hasil
+        # ============================
+        result_label = ctk.CTkLabel(container, text="Hasil perbandingan:")
+        result_label.grid(row=7, column=0, sticky="w", pady=(8, 4))
+
+        result_text = ctk.CTkTextbox(container, height=220)
+        result_text.grid(row=8, column=0, sticky="nsew", pady=(0, 8))
+
+        # ============================
+        # Tombol RUN (background thread)
+        # ============================
+        def run_compare_job():
+            file1 = file1_entry.get().strip()
+            file2 = file2_entry.get().strip()
+
+            if not file1 or not file2:
+                messagebox.showerror(
+                    "Error",
+                    "Mohon pilih kedua file snapshot terlebih dahulu.",
+                )
+                return
+
+            if not os.path.isfile(file1) or not os.path.isfile(file2):
+                messagebox.showerror("Error", "Path snapshot tidak valid.")
+                return
+
+            # Disable tombol, clear output
             run_btn.configure(state="disabled")
-            output_text.configure(state="normal")
-            output_text.delete("1.0", "end")
-            output_text.insert("end", "Starting ACI Health Check...\n")
+            result_text.delete("1.0", "end")
+            result_text.insert("end", "Membandingkan snapshot ACI...\n")
+            result_text.insert("end", f"File 1: {file1}\n")
+            result_text.insert("end", f"File 2: {file2}\n")
+            result_text.insert("end", "-" * 70 + "\n\n")
 
-            def worker():
+            def job():
                 try:
-                    apic_ip = apic_entry.get().strip()
-                    username = user_entry.get().strip()
-                    password = pass_entry.get().strip()
-                    try:
-                        health_thr = int(health_entry.get().strip())
-                    except Exception:
-                        health_thr = def_health
-                    try:
-                        cpu_thr = int(cpu_entry.get().strip())
-                    except Exception:
-                        cpu_thr = def_cpu
-                    try:
-                        intf_thr = int(intf_entry.get().strip())
-                    except Exception:
-                        intf_thr = def_interface
+                    # Jalankan compare backend
+                    comparison_result = compare_snapshots(file1, file2)
 
-                    checker = ACIHealthChecker()
+                    # Simpan ke Excel dengan nama yg kita tahu (supaya bisa ditampilkan path-nya)
+                    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                    excel_name = f"{customer_name}_comparison_result_{timestamp}.xlsx"
+                    save_to_excel(comparison_result, filename=excel_name, base_dir=None)
 
-                    # Capture console output
-                    import io
-                    from contextlib import redirect_stdout, redirect_stderr
-
-                    # Live stream writer that appends to the GUI textbox via self.after
-                    class GuiStream:
-                        def __init__(self, textbox, app):
-                            self.textbox = textbox
-                            self.app = app
-
-                        def write(self, s):
-                            if not s:
-                                return
-
-                            def append(text=s):
-                                try:
-                                    self.textbox.configure(state="normal")
-                                    self.textbox.insert("end", text)
-                                    self.textbox.see("end")
-                                    self.textbox.configure(state="disabled")
-                                except Exception:
-                                    pass
-
-                            # Schedule append on the main thread
-                            self.app.after(0, append)
-
-                        def flush(self):
-                            return
-
-                    stream = GuiStream(output_text, self)
-
-                    # Temporarily replace sys.exit to avoid terminating the whole app
-                    orig_exit = sys.exit
-                    def fake_exit(code=0):
-                        raise RuntimeError(f"sys.exit({code}) called")
-                    sys.exit = fake_exit
-
-                    try:
-                        with redirect_stdout(stream), redirect_stderr(stream):
-                            # Call login via checker.apic_login to get cookies
-                            cookies = checker.apic_login(apic_ip, username, password)
-                            if not cookies:
-                                raise RuntimeError("Login to APIC failed. Check credentials and connectivity.")
-
-                            # Prepare components
-                            api_client = checker.APIClient(apic_ip, cookies, checker.console)
-                            data_processor = checker.DataProcessor()
-                            report_generator = checker.ReportGenerator(
-                                checker.console, health_thr, cpu_thr, intf_thr
+                    def update_display():
+                        if not comparison_result:
+                            result_text.insert(
+                                "end",
+                                "✅ Tidak ada perubahan terdeteksi antara snapshot.\n",
                             )
-                            data_saver = checker.DataSaver(checker.console)
+                        else:
+                            for apic, apic_result in comparison_result.items():
+                                result_text.insert("end", f"=== APIC: {apic} ===\n")
 
-                            # Run the same sequence as run_health_check
-                            from rich.progress import Progress, SpinnerColumn, TextColumn
-                            with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), transient=True) as progress:
-                                progress.add_task(description="Collecting APIC health data...", total=None)
-                                apic_raw = api_client.fetch_apic_health()
+                                fh = apic_result.get("fabric_health")
+                                if isinstance(fh, dict):
+                                    before = fh.get("before")
+                                    after = fh.get("after")
+                                    result_text.insert(
+                                        "end",
+                                        f"Fabric health: {before} ➜ {after}\n",
+                                    )
 
-                                progress.add_task(description="Collecting node information...", total=None)
-                                top_raw = api_client.fetch_top_system()
+                                result_text.insert("end", "\nRingkasan perubahan:\n")
+                                for section, content in apic_result.items():
+                                    if section == "fabric_health":
+                                        continue
+                                    if isinstance(content, dict):
+                                        count = len(content)
+                                    elif isinstance(content, list):
+                                        count = len(content)
+                                    else:
+                                        count = 1 if content else 0
+                                    result_text.insert(
+                                        "end",
+                                        f"- {section}: {count}\n",
+                                    )
 
-                                progress.add_task(description="Checking for faults...", total=None)
-                                faults_raw = api_client.fetch_faults()
+                                result_text.insert(
+                                    "end",
+                                    "\n" + "-" * 70 + "\n\n",
+                                )
 
-                                progress.add_task(description="Collecting CPU/Memory data...", total=None)
-                                cpu_raw, mem_raw = api_client.fetch_cpu_mem()
+                        excel_path = os.path.join(
+                            "results",
+                            customer_name,
+                            "aci",
+                            "compare",
+                            excel_name,
+                        )
+                        result_text.insert(
+                            "end",
+                            f"\n📊 Detail lengkap disimpan ke file Excel:\n{excel_path}\n",
+                        )
 
-                                progress.add_task(description="Checking fabric health...", total=None)
-                                fabric_raw = api_client.fetch_fabric_health()
-
-                                progress.add_task(description="Checking FCS errors...", total=None)
-                                fcs_raw = api_client.fetch_crc_errors()
-
-                                progress.add_task(description="Checking CRC errors...", total=None)
-                                crc_raw = api_client.fetch_crc_errors()
-
-                                progress.add_task(description="Collecting drop errors...", total=None)
-                                drop_raw = api_client.fetch_drop_errors()
-
-                                progress.add_task(description="Collecting output errors...", total=None)
-                                output_raw = api_client.fetch_output_errors()
-
-                            # Process
-                            apic_nodes = data_processor.process_apic_data(apic_raw) if apic_raw else []
-                            leaf_spine_nodes = (
-                                data_processor.process_leaf_spine(
-                                    top_raw, cpu_raw if cpu_raw is not None else {}, mem_raw if mem_raw is not None else {}
-                                ) if top_raw else []
-                            )
-                            faults = data_processor.process_faults(faults_raw, 20) if faults_raw else []
-                            fabric_health = data_processor.process_fabric_health(fabric_raw) if fabric_raw else 0
-                            fcs_errors = data_processor.process_fcs_errors(fcs_raw, intf_thr) if fcs_raw else []
-                            crc_errors = data_processor.process_crc_errors(crc_raw, intf_thr) if crc_raw else []
-                            drop_errors = data_processor.process_drop_errors({"imdata": drop_raw}, intf_thr) if drop_raw else []
-                            output_errors = data_processor.process_output_errors({"imdata": output_raw}, intf_thr) if output_raw else []
-
-                            # Generate report printing
-                            report_generator.print_report(
-                                apic_nodes, leaf_spine_nodes, faults, fabric_health, fcs_errors, crc_errors, drop_errors, output_errors
-                            )
-
-                            # Save
-                            data_dict = {
-                                "apic_nodes": apic_nodes,
-                                "leaf_spine_nodes": leaf_spine_nodes,
-                                "faults": faults,
-                                "fcs_errors": fcs_errors,
-                                "crc_errors": crc_errors,
-                                "drop_errors": drop_errors,
-                                "output_errors": output_errors,
-                            }
-
-                            # Use get_customer_name if available
-                            try:
-                                from legacy.customer_context import get_customer_name
-                                customer_name = get_customer_name(default="")
-                            except Exception:
-                                customer_name = ""
-
-                            data_saver.save_report_xlsx(data_dict, customer_name, base_dir=None)
-
-                    finally:
-                        sys.exit = orig_exit
-
-                    def done_cb():
-                        # Output already streamed into the textbox; ensure it's disabled and notify
-                        output_text.configure(state="disabled")
-                        messagebox.showinfo("Done", "ACI Health Check completed. See output box for details.")
-                        run_btn.configure(state="normal")
-
-                    self.after(0, done_cb)
-
+                    self.after(0, update_display)
                 except Exception as e:
-                    def err_cb():
-                        output_text.delete("1.0", "end")
-                        output_text.insert("end", f"Error: {e}\n")
-                        output_text.configure(state="disabled")
-                        messagebox.showerror("Error", f"ACI Health Check failed:\n{e}")
-                        run_btn.configure(state="normal")
+                    self.after(
+                        0,
+                        lambda: messagebox.showerror(
+                            "Error",
+                            f"Comparison failed:\n{e}",
+                        ),
+                    )
+                finally:
+                    self.after(0, lambda: run_btn.configure(state="normal"))
 
-                    self.after(0, err_cb)
+            # Jalan di background thread supaya GUI tidak freeze
+            self._run_in_thread(job)
 
-            self._run_in_thread(worker)
-
-        run_btn = ctk.CTkButton(container, text="Run Health Check", command=run_job)
-        run_btn.grid(row=10, column=0, sticky="ew", pady=(4, 4))
-
-        # Back button
-        ctk.CTkButton(container, text="Back to ACI Menu", command=self.show_aci_tools).grid(row=11, column=0, sticky="ew", pady=(4, 0))
-
-    def _handle_aci_snapshot_todo(self):
-        # Handler placeholder untuk "Take Snapshot" ACI.
-        # TODO: Integrasi dengan fungsi snapshot setelah input APIC, kredensial, dll.
-        messagebox.showinfo(
-            "TODO",
+        run_btn = ctk.CTkButton(
+            container,
+            text="Run Compare",
+            command=run_compare_job,
         )
+        run_btn.grid(row=9, column=0, sticky="ew", pady=(4, 8))
 
-    def _handle_aci_compare_todo(self):
-        # Handler placeholder untuk "Compare Snapshots".
-        # TODO: Integrasi dengan fungsi compare snapshot setelah flow pemilihan file.
-        messagebox.showinfo(
-            "TODO",
-        )
+        # Tombol Back ke menu ACI
+        ctk.CTkButton(
+            container,
+            text="Back to ACI Tools",
+            command=self.show_aci_tools,
+        ).grid(row=10, column=0, sticky="ew", pady=(4, 0))
+
 
     # ========================================================
     # Halaman SP Tools 
