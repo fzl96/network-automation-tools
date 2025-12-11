@@ -9,3 +9,6 @@ legacy/creds/credentials.json
 results
 /legacy/backup_config/output
 connect_error.csv
+/build
+dist/main.exe
+main.spec
