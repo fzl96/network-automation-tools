@@ -1,3 +1,4 @@
+import sys
 import json
 import csv
 import os
@@ -21,7 +22,8 @@ console = Console()
 
 
 def load_key():
-    with open(KEY_FILE, "rb") as key_file:
+    key_path = get_key_path(os.path.join("legacy", "creds", "key.key"))
+    with open(key_path, "rb") as key_file:
         return key_file.read()
 
 
@@ -571,3 +573,13 @@ def load_devices(file="inventory.csv"):
 
     except FileNotFoundError:
         return []
+
+
+def get_key_path(relative_path):
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
