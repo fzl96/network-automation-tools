@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""
-legacy_main.py
-Professional, clean interface for Legacy Network Tools
-"""
-
 import subprocess
 import sys
 import os
 import time
+import pyfiglet
+import shutil
+from rich.console import Console
+from rich.panel import Panel
+console = Console()
 
 # ============================================================
 # Script Runner
@@ -54,26 +54,53 @@ def slow_print(text, delay=0.02):
         time.sleep(delay)
     print()
 
+def get_terminal_width(default=100):
+    """Return current terminal width or a default if detection fails"""
+    try:
+        width = shutil.get_terminal_size().columns
+        return width
+    except:
+        return default
 
 def print_header():
-    """Display header"""
+    """Display header with colored logo and big title"""
     clear_screen()
-    print("=" * 60)
-    print("🧩  LEGACY NETWORK TOOLS".center(60))
-    print("=" * 60)
-    print()
+    width = get_terminal_width()
+    red = "\033[31m"
+    reset = "\033[0m"
+
+    print()  # spacing
+
+    ascii_title = pyfiglet.figlet_format("SP TOOLS", font="standard")
+
+    for line in ascii_title.splitlines():
+        print(f"{red}{line.center(width)}{reset}")
+
+    print()  # spacing
 
 
 def show_menu():
-    """Display main menu options"""
-    print("Available Actions")
-    print("-" * 60)
-    print("1. Atlas_v1")
-    print("2. CRCell_v1")
-    print("3. Snipe_v1")
-    print("4. Xray_v1")
-    print("q. Exit")
-    print("-" * 60)
+    console.print("\n")
+    menu_text = """
+    [bold]1.[/bold] Atlas_v1
+
+    [bold]2.[/bold] CRCell_v1
+
+    [bold]3.[/bold] Snipe_v1
+
+    [bold]4.[/bold] Xray_v1
+
+    [bold]q.[/bold] Exit
+    """
+    console.print(
+        Panel(
+            menu_text,
+            title="[bold]🧰 Available Tools[/bold]",
+            title_align="left",
+            border_style="grey37",
+            padding=(1, 2),
+        )
+    )
 
 
 # ============================================================
@@ -85,6 +112,8 @@ def main():
     while True:
         print_header()
         show_menu()
+        green = "\033[32m"
+        reset = "\033[0m"
 
         choice = input("\nSelect an option (1-4 or q): ").strip().lower()
 
@@ -101,7 +130,7 @@ def main():
             run_script("Xray_v1/xray_8.py")
 
         elif choice == "q":
-            slow_print("\nExiting Legacy Network Tools...")
+            slow_print(f"{green}{"\nExit SP Tools..."}{reset}")  
             time.sleep(0.3)
             print("✅ Goodbye! 👋")
             break

@@ -4,34 +4,42 @@ import csv
 import sys
 import time
 import logging
-import paramiko
+import shutil
+import pyfiglet
 from datetime import datetime
 from typing import List, Dict, Optional
-from legacy.inventory.inventory import detect_os_type
+
+from inventory.lib.detect_os_type import detect_os_type
+
 from legacy.customer_context import get_customer_name
-from napalm import get_network_driver
-from rich.console import Console
-from rich.table import Table
 from legacy.lib.utils import load_key
+
+from napalm import get_network_driver
 from napalm.base.base import NetworkDriver
+
 from cryptography.fernet import Fernet
 
+from rich.console import Console
+from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, TextColumn
 
+
+# CONSTANTS & INITIAL SETUP
 KEY_FILE = os.path.join("legacy/creds", "key.key")
-
-customer = get_customer_name()
-
-# === CONFIGURATION ===
 INVENTORY_FILE = "inventory.csv"
 BACKUP_DIR = "legacy/backup_config/output"
 
-# === LOGGING SETUP ===
+customer = get_customer_name()
+
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-# === RICH CONSOLE ===
 console = Console()
+
+GREEN = "\033[32m"
+RED = "\033[31m"
+RESET = "\033[0m"
 
 
 # === UTILITY FUNCTIONS ===
@@ -45,9 +53,10 @@ def clear_screen() -> None:
     os.system("cls" if os.name == "nt" else "clear")
 
 
-def pause(message: str = "\nPress ENTER to continue...") -> None:
-    """Pause execution for user input."""
-    input(message)
+def pause(message="\nPress ENTER to continue..."):
+    green = "\033[32m"  # Green
+    reset = "\033[0m"
+    input(f"{green}{message}{reset}")
 
 
 def slow_print(text: str, delay: float = 0.02) -> None:
@@ -58,7 +67,15 @@ def slow_print(text: str, delay: float = 0.02) -> None:
         time.sleep(delay)
     print()
 
+def get_terminal_width(default=100):
+    """Return current terminal width or a default if detection fails"""
+    try:
+        width = shutil.get_terminal_size().columns
+        return width
+    except:
+        return default
 
+# INVENTORY FUNCTIONS
 def load_inventory() -> List[Dict[str, str]]:
     devices = []
     try:
@@ -94,51 +111,6 @@ def load_inventory() -> List[Dict[str, str]]:
         console.print("[yellow]⚠ Inventory file missing[/yellow]")
 
     return devices
-
-
-# # === DETECT OS FUNCTIONS ===
-# def detect_os(ip: str, username: str, password: str) -> str:
-#     """Detect OS and return napalm driver name."""
-#     try:
-#         # SSH banner detection
-#         client = paramiko.SSHClient()
-#         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-#         client.connect(
-#             ip, username=username, password=password, timeout=5, look_for_keys=False
-#         )
-#         banner = client.get_transport().remote_version.lower()
-#         client.close()
-#
-#         if "cisco" in banner:
-#             if "ios-xe" in banner or "iosxe" in banner:
-#                 return "ios"
-#             if "nx-os" in banner or "nexus" in banner:
-#                 return "nxos"
-#             if "asa" in banner:
-#                 return "asa"
-#
-#         if "juniper" in banner or "junos" in banner:
-#             return "junos"
-#
-#         if "arista" in banner or "eos" in banner:
-#             return "eos"
-#
-#     except Exception:
-#         pass  # Fall back to driver probing
-#
-#     # NAPALM probe
-#     for drv in ["ios", "nxos", "asa", "junos", "eos"]:
-#         try:
-#             driver = get_network_driver(drv)
-#             conn = driver(hostname=ip, username=username, password=password)
-#             conn.open()
-#             conn.close()
-#             return drv
-#         except:
-#             continue
-#
-#     return "ios"  # Default fallback
-
 
 def auto_update_inventory(
     devices: List[Dict[str, str]], username: str, password: str
@@ -221,21 +193,21 @@ def backup_configs(device, device_dir: str) -> None:
         for cfg_type, cfg_content in configs.items():
             if cfg_content:
                 filename = os.path.join(
-                    device_dir, f"{customer}_{hostname}_{cfg_type}_{timestamp}.cfg"
+                    device_dir,
+                    f"{customer}_{hostname}_{cfg_type}_{timestamp}.cfg"
                 )
                 with open(filename, "w") as f:
-                    f.write(cfg_content)  # type: ignore
-                console.print(
-                    f"[green]✅ [{hostname}] Saved {cfg_type} config → {filename}[/green]"
-                )
+                    f.write(cfg_content) # type: ignore
+
+                logging.info(f"Backed up {cfg_type} for {hostname} to {filename}")
+                console.print(f"[cyan]💾 [{hostname}] {cfg_type} config saved to: {filename}[/cyan]")
 
         device_conn.close()
-        logging.info(f"Backup completed for {ip}")
-
+        logging.info(f"Backup completed for All Device")
+                
     except Exception as e:
         logging.error(f"Failed to back up {ip}: {e}")
         console.print(f"[red]❌ Error backing up {ip}: {e}[/red]")
-
 
 def backup_commands(
     device: Dict[str, str], commands: List[str], device_dir: str
@@ -270,9 +242,7 @@ def backup_commands(
                 output = device_conn.cli([cmd])[cmd]
                 f.write(f"$ {cmd}\n{output}\n{'-' * 60}\n\n")
 
-        console.print(
-            f"[cyan]📄 [{hostname}] Command outputs saved to: {output_filename}[/cyan]"
-        )
+        console.print(f"[cyan]📄 [{hostname}] Command outputs saved to: {output_filename}[/cyan]")
 
         device_conn.close()
         logging.info(f"Command backup completed for {hostname}")
@@ -283,32 +253,40 @@ def backup_commands(
 
 
 # === UI FUNCTIONS ===
-def print_header() -> None:
+def print_header():
+    """Display header with colored logo and big title"""
     clear_screen()
-    print("=" * 60)
-    print("🧩  BACKUP CONFIG TOOLS".center(60))
-    print("=" * 60)
-    print()
+    width = get_terminal_width()
+    red = "\033[31m"
+    reset = "\033[0m"
 
+    print()  # spacing
+
+    ascii_title = pyfiglet.figlet_format("BACKUP CONFIG TOOLS", font="standard")
+
+    for line in ascii_title.splitlines():
+        print(f"{red}{line.center(width)}{reset}")
+
+    print()  # spacing
 
 def print_menu() -> None:
-    print("MAIN MENU")
-    print("-" * 50)
-    print("1. Backup configurations")
-    # print("2. Backup specific command outputs")
-    print("2. Both (configs + commands)")
-    print("q. Exit Program")
-    print("-" * 50)
+    console.print("\n")
+    menu_text = """
+        [bold]1.[/bold] Backup configurations
 
+        [bold]2.[/bold] Both (configs + commands)
 
-def display_inventory_table(devices: List[Dict[str, str]]) -> None:
-    table = Table(title="Detected Devices")
-    table.add_column("IP Address", style="cyan")
-    table.add_column("OS / Driver", style="magenta")
-    for dev in devices:
-        table.add_row(dev["ip"], dev["os"])
-    console.print(table)
-
+        [bold]q.[/bold] Exit
+        """
+    console.print(
+        Panel(
+            menu_text,
+            title="[bold]🧰 Backup Options[/bold]",
+            title_align="left",
+            border_style="grey37",
+            padding=(1, 2),
+        )
+    )    
 
 # === MAIN LOGIC ===
 def run_backup(
@@ -318,7 +296,6 @@ def run_backup(
 ) -> None:
     """Main function to handle user menu and backup options."""
     devices = load_inventory()
-    # devices = auto_update_inventory(devices, username, password)
 
     if not devices:
         console.print(
@@ -334,7 +311,8 @@ def run_backup(
     while True:
         print_header()
         print_menu()
-        display_inventory_table(devices)
+        green = "\033[32m"
+        reset = "\033[0m"        
 
         choice = input("\nEnter your choice: ").strip().lower()
 
@@ -344,70 +322,77 @@ def run_backup(
             path = os.path.join("results", customer, "legacy", "backup")
 
         if choice == "1":
-            slow_print("\n🚀 Starting configuration backups...\n")
-            for dev in devices:
-                hostname = dev.get("name", "")
-                if (
-                    not dev.get("ip")
-                    or not dev.get("username")
-                    or not dev.get("password")
-                    or not dev.get("os")
-                ):
-                    console.print(
-                        "[yellow]⚠️ Device entry is not completed, please create or update the inventory first. [/yellow]"
-                    )
-                    continue
+            slow_print(f"{green}\n⏳ Starting configuration backups...{reset}")
+            # Use Rich Progress
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                transient=True,  # removes progress bar after completion
+            ) as progress:        
+                for dev in devices:
+                    hostname = dev.get("name", "")
+                    if (
+                        not dev.get("ip")
+                        or not dev.get("username")
+                        or not dev.get("password")
+                        or not dev.get("os")
+                    ):
+                        console.print("[yellow]⚠️ Device entry is not completed, please create or update the inventory first. [/yellow]")
+                        continue
 
-                console.print(
-                    f"[green]Starting backup for {dev.get('ip'), ''} - {dev.get('name', '')}[/green]"
-                )
+                    task = progress.add_task(f"Backing up {hostname}...", start=False)
+                    progress.start_task(task)
 
-                device_dir = os.path.join(path, hostname)
-                ensure_dir(device_dir)
-                backup_configs(dev, device_dir)
+                    device_dir = os.path.join(path, hostname)
+                    ensure_dir(device_dir)
+                    backup_configs(dev, device_dir)
+                
+                    progress.update(task, completed=1)  # mark as done
+                    logging.info(f"Completed backup for {hostname}")
+
+            print(f"{GREEN} ✅ All configuration backups completed.{RESET}")        
             pause()
-
-        # elif choice == "2":
-        #     raw_cmds = input(
-        #         "Enter command(s) separated by commas (e.g., 'show version,show interfaces'): "
-        #     ).strip()
-        #     commands = [cmd.strip() for cmd in raw_cmds.split(",") if cmd.strip()]
-        #     slow_print("\n🚀 Starting command backups...\n")
-        #     for dev in devices:
-        #         backup_commands(dev, username, password, commands)
-        #     pause()
 
         elif choice == "2":
             raw_cmds = input(
                 "Enter command(s) separated by commas (e.g., 'show version,show interfaces'): "
             ).strip()
             commands = [cmd.strip() for cmd in raw_cmds.split(",") if cmd.strip()]
-            slow_print("\n🚀 Starting full backups (config + commands)...\n")
-            for dev in devices:
-                hostname = dev.get("name", "")
-                if (
-                    not dev.get("ip")
-                    or not dev.get("username")
-                    or not dev.get("password")
-                    or not dev.get("os")
-                ):
-                    console.print(
-                        "[yellow]⚠️ Device entry is not completed, please create or update the inventory first. [/yellow]"
-                    )
-                    continue
-                console.print(
-                    f"[green]Starting backup for {dev.get('ip'), ''} - {dev.get('name', '')}[/green]"
-                )
+            slow_print(f"{green}\n⏳ Starting configuration backups...{reset}")
+            
+            # Use Rich Progress
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                transient=True,  # removes progress bar after completion
+            ) as progress:
+                             
+                for dev in devices:
+                    hostname = dev.get("name", "")
+                    if (
+                        not dev.get("ip")
+                        or not dev.get("username")
+                        or not dev.get("password")
+                        or not dev.get("os")
+                    ):
+                        console.print(
+                            "[yellow]⚠️ Device entry is not completed, please create or update the inventory first. [/yellow]"
+                        )
+                        continue
+                    task = progress.add_task(f"Backing up {hostname}...", start=False)
+                    progress.start_task(task)
 
-                device_dir = os.path.join(path, hostname)
-                ensure_dir(device_dir)
-                backup_commands(dev, commands, device_dir)
-                backup_configs(dev, device_dir)
+                    device_dir = os.path.join(path, hostname)
+                    ensure_dir(device_dir)
+                    backup_commands(dev, commands, device_dir)
+                    backup_configs(dev, device_dir)
+                    progress.update(task, completed=2)  # mark as done
             pause()
 
         elif choice == "q":
-            slow_print("\nExiting backup system...")
-            print("✅ Backup system exit complete. Goodbye! 👋")
+            slow_print(f"{green}\nExit backup tools...{reset}")
+            time.sleep(0.3)
+            print("✅ Goodbye! 👋")
             break
 
         else:

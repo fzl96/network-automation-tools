@@ -32,9 +32,6 @@ class ACIHealthChecker:
         self.console = Console()
 
         # Configuration with default values
-        self.DEFAULT_APIC_IP = "10.8.254.91"
-        self.DEFAULT_USERNAME = "admin"
-        self.DEFAULT_PASSWORD = "Master082025"
         self.DEFAULT_HEALTH_THRESHOLD = 90
         self.DEFAULT_CPU_MEM_THRESHOLD = 75  # percent
         self.DEFAULT_INTERFACE_ERROR_THRESHOLD = 0
@@ -51,33 +48,18 @@ class ACIHealthChecker:
             apic_ip = input("Enter APIC IP (e.g., 10.10.10.1): ").strip()
         except EOFError:
             apic_ip = ""
-        if not apic_ip:
-            apic_ip = self.DEFAULT_APIC_IP
-            self.console.print(
-                f"[dim]Using default APIC IP: {self.DEFAULT_APIC_IP}[/dim]"
-            )
 
         # Get username
         try:
             username = input("Enter Username: ").strip()
         except EOFError:
             username = ""
-        if not username:
-            username = self.DEFAULT_USERNAME
-            self.console.print(
-                f"[dim]Using default username: {self.DEFAULT_USERNAME}[/dim]"
-            )
 
         # Get password
         try:
             password = getpass.getpass("Enter Password: ")
         except Exception:
             password = ""
-        if not password:
-            password = self.DEFAULT_PASSWORD
-            self.console.print(
-                f"[dim]Using default password: {self.DEFAULT_PASSWORD}[/dim]"
-            )
 
         return apic_ip, username, password
 

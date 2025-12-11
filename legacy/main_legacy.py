@@ -1,21 +1,19 @@
 #!/usr/bin/env python3
-"""
-legacy_main.py
-Professional, clean interface for Legacy Network Tools
-"""
-
 import sys
 import os
 import time
 import getpass
+import pyfiglet
+import shutil
+from rich.console import Console
+from rich.panel import Panel
 from legacy.creds.credential_manager import save_credentials, load_credentials
-from legacy.inventory.inventory import create_inventory, show_inventory
 from legacy.backup_config.backup import run_backup
 from legacy.lib.utils import collect_devices_data
 from legacy.lib.snapshot import take_snapshot
 from legacy.lib.compare import compare
 
-
+console = Console()
 # ============================================================
 # Utility Functions
 # ============================================================
@@ -27,8 +25,9 @@ def clear_screen():
 
 
 def pause(message="\nPress ENTER to continue..."):
-    """Pause execution for user input"""
-    input(message)
+    green = "\033[32m"  # Green
+    reset = "\033[0m"
+    input(f"{green}{message}{reset}")
 
 
 def slow_print(text, delay=0.02):
@@ -40,28 +39,54 @@ def slow_print(text, delay=0.02):
     print()
 
 
-def print_header():
-    """Display header"""
-    clear_screen()
-    print("=" * 60)
-    print("🧩  LEGACY NETWORK TOOLS".center(60))
-    print("=" * 60)
-    print()
+def get_terminal_width(default=100):
+    """Return current terminal width or a default if detection fails"""
+    try:
+        width = shutil.get_terminal_size().columns
+        return width
+    except:
+        return default
 
+def print_header():
+    """Display header with colored logo and big title"""
+    clear_screen()
+    width = get_terminal_width()
+    red = "\033[31m"
+    reset = "\033[0m"
+
+    print()  # spacing
+
+    ascii_title = pyfiglet.figlet_format("LEGACY TOOLS", font="standard")
+
+    for line in ascii_title.splitlines():
+        print(f"{red}{line.center(width)}{reset}")
+
+    print()  # spacing
 
 def show_menu():
-    """Display main menu options"""
-    print("Available Actions")
-    print("-" * 60)
-    print("1. Save credentials securely")
-    print("2. Create or update device inventory")
-    print("3. Backup device configurations")
-    print("4. Show inventory list")
-    print("5. Take Snapshot + Health Check")
-    print("6. Compare Snapshot")
-    print("7. Mantools Online")
-    print("q. Exit")
-    print("-" * 60)
+    console.print("\n")
+    menu_text = """
+    [bold]1.[/bold] Save credentials securely
+
+    [bold]2.[/bold] Backup Device Configurations
+
+    [bold]3.[/bold] Take Snapshot and Health Check
+
+    [bold]4.[/bold] Compare Snapshot
+
+    [bold]5.[/bold] Mantools Online
+    
+    [bold]q.[/bold] Exit
+    """
+    console.print(
+        Panel(
+            menu_text,
+            title="[bold]🧰 Available Tools[/bold]",
+            title_align="left",
+            border_style="grey37",
+            padding=(1, 2),
+        )
+    )
 
 
 # ============================================================
@@ -74,11 +99,13 @@ def main():
     while True:
         print_header()
         show_menu()
+        green = "\033[32m"
+        reset = "\033[0m"
 
         choice = input("\nSelect an option (1-4 or q): ").strip().lower()
 
         if choice == "1":
-            slow_print("\n🔐 Saving credentials securely...")
+            slow_print(f"{green}{"\n🔐 Saving credentials securely..."}{reset}")
             username = input("Enter username: ").strip()
             password = getpass.getpass("Enter Password (default hidden): ")
             save_credentials("default", username, password)
@@ -93,44 +120,26 @@ def main():
                 )
                 pause()
                 continue
-            slow_print("\n📋 Creating or updating inventory...")
-            create_inventory(username, password)
-            pause()
+            slow_print(f"{green}{"\n💾 Running configuration backup..."}{reset}")
+            run_backup(username, password)
 
         elif choice == "3":
-            username, password = load_credentials()
-            if not username or not password:
-                print(
-                    "\n⚠️  No saved credentials found. Please save credentials first (option 1)."
-                )
-                pause()
-                continue
-            slow_print("\n💾 Running configuration backup...")
-            run_backup(username, password)
-            pause()
-
-        elif choice == "4":
-            slow_print("\n📄 Displaying inventory list...")
-            show_inventory()
-            pause()
-
-        elif choice == "5":
-            slow_print("\n📄 Taking snapshots and health check...")
+            slow_print(f"{green}{"\n⏳ Taking snapshots and health check..."}{reset}")            
             take_snapshot(base_dir)
             pause()
 
-        elif choice == "6":
-            slow_print("\n📄 Comparing snapshots...")
+        elif choice == "4":
+            slow_print(f"{green}{"\n🔍  Comparing snapshots..."}{reset}")   
             compare(base_dir)
             pause()
 
-        elif choice == "7":
-            slow_print("\n📄 Running tool...")
+        elif choice == "5":
+            slow_print(f"{green}{"\n⏳ Collecting log for mantools online..."}{reset}")               
             collect_devices_data(base_dir)
             pause()
 
         elif choice == "q":
-            slow_print("\nExiting Legacy Network Tools...")
+            slow_print(f"{green}{"\nExit Legacy Tools..."}{reset}")               
             time.sleep(0.3)
             print("✅ Goodbye! 👋")
             break
