@@ -24,7 +24,7 @@ from legacy.customer_context import get_customer_name
 
 console = Console()
 
-customer = get_customer_name()
+
 
 PATH_RE = re.compile(
     r"topology/pod-(?P<pod>\d+)/paths-(?P<node>\d+)/pathep-\[(?P<if>[^\]]+)\]"
@@ -112,6 +112,7 @@ def take_snapshot(cookies, apic_ip):
 
 
 def list_snapshots(base_dir=None):
+    customer = get_customer_name()
     if base_dir:
         folder = os.path.join(base_dir, customer, "aci", "snapshot")
     else:
@@ -132,6 +133,7 @@ def list_snapshots(base_dir=None):
 
 
 def choose_snapshots(base_dir=None):
+    customer = get_customer_name()
     files = list_snapshots(base_dir)
     if base_dir:
         folder = os.path.join(base_dir, customer, "aci", "snapshot")
@@ -157,6 +159,7 @@ def choose_snapshots(base_dir=None):
 
 
 def take_all_snapshots(base_dir=None):
+    customer = get_customer_name()
     devices = load_devices()
 
     combined = {}

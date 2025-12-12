@@ -12,8 +12,6 @@ from aci.snapshot.snapshotter import choose_snapshots
 from aci.lib.utils import load_devices
 from legacy.customer_context import get_customer_name
 
-customer_name = get_customer_name()
-
 
 def _autosize_columns(ws, padding=2, min_width=12, max_width=80):
     widths = {}

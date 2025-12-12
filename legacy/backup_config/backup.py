@@ -29,7 +29,7 @@ KEY_FILE = os.path.join("legacy/creds", "key.key")
 INVENTORY_FILE = "inventory.csv"
 BACKUP_DIR = "legacy/backup_config/output"
 
-customer = get_customer_name()
+
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -174,6 +174,7 @@ def connect_to_device(device: Dict[str, str]) -> NetworkDriver:
 
 # === BACKUP FUNCTIONS ===
 def backup_configs(device, device_dir: str) -> None:
+    customer = get_customer_name()
     ip = device["ip"]
 
     try:
@@ -212,6 +213,7 @@ def backup_configs(device, device_dir: str) -> None:
 def backup_commands(
     device: Dict[str, str], commands: List[str], device_dir: str
 ) -> None:
+    customer = get_customer_name()
     ip = device["ip"]
 
     logging.info(f"Connecting to {ip} for command execution...")
@@ -296,6 +298,7 @@ def run_backup(
 ) -> None:
     """Main function to handle user menu and backup options."""
     devices = load_inventory()
+    customer = get_customer_name()
 
     if not devices:
         console.print(

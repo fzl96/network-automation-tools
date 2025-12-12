@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import logging
+import paramiko
 from napalm import get_network_driver
 from paramiko import AuthenticationException
 
@@ -63,8 +64,8 @@ def detect_os_type(ip, username=None, password=None):
             
             device = driver(
                 hostname=ip,
-                username=username,
-                password=password,
+                username=username, # type: ignore
+                password=password, # type: ignore
                 optional_args=optional_args,
             )
             
@@ -104,7 +105,6 @@ def detect_os_type(ip, username=None, password=None):
 def quick_apic_check(ip, username, password):
     """Detect APIC by parsing 'show versions' and extracting controller hostname."""
     try:
-        import paramiko
 
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -117,6 +117,7 @@ def quick_apic_check(ip, username, password):
             banner_timeout=8,
             auth_timeout=8
         )
+        logging.console(f"Connected to {ip} for APIC check")
 
         # Menggunakan cmd 'show versions' (format tabel Role/Pod/Node/Name/Version)
         stdin, stdout, stderr = client.exec_command("show versions", timeout=5)
