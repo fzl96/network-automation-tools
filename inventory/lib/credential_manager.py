@@ -1,43 +1,39 @@
 import os
 import json
-import sys
 from cryptography.fernet import Fernet
+from pathlib import Path
 
-BASE_DIR = os.path.dirname(__file__)
-KEY_FILE = os.path.join(BASE_DIR, "key.key")
-CRED_FILE = os.path.join(BASE_DIR, "credentials.json")
+# ---------------------------
+# Use a user-writable folder
+# ---------------------------
+HOME = Path.home()
+APP_DIR = HOME / ".mantools"  # hidden folder in user home
+APP_DIR.mkdir(parents=True, exist_ok=True)
 
+KEY_FILE = APP_DIR / "key.key"
+CRED_FILE = APP_DIR / "credentials.json"
 
-def get_key_path(relative_path):
-    try:
-        # PyInstaller creates a temp folder and stores path in _MEIPASS
-        base_path = sys._MEIPASS # type: ignore
-    except Exception:
-        base_path = os.path.abspath(".")
-
-    return os.path.join(base_path, relative_path)
-
+# ---------------------------
+# Key management
+# ---------------------------
 def generate_key():
-    if not os.path.exists(KEY_FILE):
+    if not KEY_FILE.exists():
         key = Fernet.generate_key()
-        with open(KEY_FILE, "wb") as key_file:
-            key_file.write(key)
-
+        KEY_FILE.write_bytes(key)
 
 def load_key():
-    key_path = get_key_path(os.path.join("inventory", "lib", "key.key"))
-    with open(key_path, "rb") as key_file:
-        return key_file.read()
-
-
-def save_credentials(profile_name, username, password):
     generate_key()
+    return KEY_FILE.read_bytes()
+
+# ---------------------------
+# Credentials management
+# ---------------------------
+def save_credentials(profile_name, username, password):
     key = load_key()
     fernet = Fernet(key)
 
-    if os.path.exists(CRED_FILE):
-        with open(CRED_FILE, "r") as f:
-            data = json.load(f)
+    if CRED_FILE.exists():
+        data = json.loads(CRED_FILE.read_text())
     else:
         data = {}
 
@@ -46,23 +42,18 @@ def save_credentials(profile_name, username, password):
         "password": fernet.encrypt(password.encode()).decode(),
     }
 
-    with open(CRED_FILE, "w") as f:
-        json.dump(data, f, indent=4)
-
+    CRED_FILE.write_text(json.dumps(data, indent=4))
     print(f"✅ Credentials saved for profile '{profile_name}'.")
 
-
 def load_credentials(profile_name="default"):
-    if not os.path.exists(CRED_FILE):
+    if not CRED_FILE.exists():
         print("⚠️ No saved credentials found.")
         return None, None
 
     key = load_key()
     fernet = Fernet(key)
 
-    with open(CRED_FILE, "r") as f:
-        data = json.load(f)
-
+    data = json.loads(CRED_FILE.read_text())
     if profile_name not in data:
         print(f"⚠️ No credentials found for profile '{profile_name}'.")
         return None, None
@@ -72,15 +63,10 @@ def load_credentials(profile_name="default"):
 
     username = fernet.decrypt(enc_user.encode()).decode()
     password = fernet.decrypt(enc_pass.encode()).decode()
-
     return username, password
 
-
 def list_profiles():
-    if not os.path.exists(CRED_FILE):
+    if not CRED_FILE.exists():
         return []
-
-    with open(CRED_FILE, "r") as f:
-        data = json.load(f)
-
+    data = json.loads(CRED_FILE.read_text())
     return list(data.keys())

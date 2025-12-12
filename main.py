@@ -57,9 +57,16 @@ def get_terminal_width(default=100):
     except:
         return default
 
+def resource_path(relative_path):
+    """Get the absolute path to a resource, works with PyInstaller."""
+    if hasattr(sys, "_MEIPASS"):
+        # _MEIPASS is the temp folder PyInstaller extracts files into
+        return Path(sys._MEIPASS) / relative_path # type: ignore
+    return Path(relative_path)
+
 def print_colored_logo():
     """Print the MSI logo in red from a text file"""
-    logo_file = Path("assets/msi_logo.txt")
+    logo_file = resource_path("assets/msi_logo.txt")
     red_code = "\033[1;31m"  # Bright red
     reset_code = "\033[0m"
     width = get_terminal_width()

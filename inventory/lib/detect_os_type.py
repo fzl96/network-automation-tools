@@ -1,221 +1,355 @@
 #!/usr/bin/env python3
 import logging
 import paramiko
-from napalm import get_network_driver
+from typing import Optional, Tuple, Dict
+from netmiko import SSHDetect, BaseConnection, ConnectHandler
 from paramiko import AuthenticationException
-
+import socket
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-def detect_os_type(ip, username=None, password=None):
-    # First, try APIC detection
-    apic_result = quick_apic_check(ip, username, password)
-    if apic_result:
-        return apic_result
+class OSDetector:
+    """Optimized OS detector using Netmiko with faster detection."""
     
-    # Try drivers in optimal order for Cisco devices
-    drivers = ["ios", "nxos_ssh", "nxos", "iosxr","junos","eos"]
+    # Device type priority based on your network (most common first)
+    DEVICE_PRIORITY = [
+        'cisco_ios',        # Cisco IOS - most common
+        'cisco_nxos',       # Cisco NX-OS - for your NX-OS devices
+        'cisco_xe',         # Cisco IOS-XE
+        'cisco_xr',         # Cisco IOS-XR
+        'arista_eos',       # Arista EOS
+        'juniper_junos',    # Juniper JunOS
+        'cisco_asa',        # Cisco ASA
+        'hp_procurve',      # HP ProCurve
+    ]
     
-    for driver_name in drivers:
+    # Quick detection patterns for common devices
+    QUICK_PATTERNS = {
+        'cisco_ios': [r'[Cc]isco [Ii][Oo][Ss]', r'ios software', r'ios-xe'],
+        'cisco_nxos': [r'[Nn]x-[Oo][Ss]', r'nexus', r'NX-OS'],
+        'cisco_xe': [r'ios-xe', r'xe software'],
+        'cisco_xr': [r'ios xr', r'xr software'],
+        'arista_eos': [r'arista', r'eos'],
+        'juniper_junos': [r'junos', r'juniper'],
+    }
+    
+    def __init__(self, ip: str, username: Optional[str] = None, password: Optional[str] = None):
+        self.ip = ip
+        self.username = username
+        self.password = password
+        self.connection = None
+        
+    def detect(self) -> Tuple[str, Optional[str]]:
+        """Main detection method with optimized flow."""
+        
+        # First, try APIC detection (special case)
+        apic_result = self._detect_apic()
+        if apic_result:
+            return apic_result
+        
+        # Try fast detection with common device types first
+        fast_result = self._fast_detection()
+        if fast_result and fast_result[0] not in ["AUTH_FAIL", "UNREACHABLE"]:
+            return fast_result
+        
+        # If fast detection failed, try comprehensive detection
+        return self._comprehensive_detection()
+    
+    def _detect_apic(self) -> Optional[Tuple[str, str]]:
+        """Detect APIC by parsing 'show versions' output."""
         try:
-            logging.debug(f"Trying driver: {driver_name} for {ip}")
-            optional_args = {
-                "timeout": 10,
-                "banner_timeout": 15,
-                "session_timeout": 20
-            }
+            client = paramiko.SSHClient()
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             
-            # Special handling for NX-OS SSH
-            if driver_name == "nxos_ssh":
-                result = try_nxos_ssh(ip, username, password)
-                if result:
-                    return result
-                continue
-            
-            driver = get_network_driver(driver_name)
-            
-            # Platform-specific optional arguments
-            optional_args: dict[str, int | str | bool] = {"timeout": 5}
-            
-            if driver_name == "nxos":
-                # NX-OS with Netconf
-                optional_args.update({
-                    "port": 22,
-                    "transport": "ssh",
-                    "allow_agent": False,
-                    "hostkey_verify": False
-                })
-            elif driver_name == "iosxr":
-                # IOS-XR with Netconf
-                optional_args.update({
-                    "port": 22,
-                    "transport": "ssh",
-                    "hostkey_verify": False
-                })
-            elif driver_name == "junos":
-                # JunOS typically uses port 830 for Netconf
-                optional_args.update({"port": 830})
-            elif driver_name == "eos":
-                # EOS uses eAPI/HTTP
-                optional_args.update({"port": 443, "transport": "https"})
-            
-            device = driver(
-                hostname=ip,
-                username=username, # type: ignore
-                password=password, # type: ignore
-                optional_args=optional_args,
+            client.connect(
+                hostname=self.ip,
+                username=self.username,
+                password=self.password,
+                timeout=8,
+                banner_timeout=8,
+                auth_timeout=8
             )
             
-            device.open()
-            facts = device.get_facts()
-            device.close()
-
-            hostname = facts.get("hostname", "Unknown")
-            os_ver = facts.get("os_version", "Unknown")
-
-
-            if driver_name == "ios" and os_ver == "Unknown":
-                logging.debug(f"IOS driver returned unknown OS version on {ip}, trying next driver")
-                continue
-
-            logging.info(f"Detected {os_ver} on {ip} ({driver_name}) - Hostname: {hostname}")
-            return driver_name, hostname
-
-
+            logging.debug(f"Connected to {self.ip} for APIC check")
+            
+            # Execute command to get version info
+            stdin, stdout, stderr = client.exec_command("show versions", timeout=5)
+            output = stdout.read().decode("utf-8", errors="ignore")
+            client.close()
+            
+            # Parse output for APIC controller info
+            hostname = self._parse_apic_output(output)
+            
+            if hostname:
+                logging.info(f"Detected APIC on {self.ip} - Hostname: {hostname}")
+                return "apic", hostname
+            
+            # Fallback detection using keywords
+            if self._is_apic_by_keywords(output):
+                logging.info(f"Detected APIC via keyword match on {self.ip}")
+                return "apic", "apic-controller"
+                
+            return None
+            
+        except AuthenticationException:
+            return "AUTH_FAIL", None # type: ignore
         except Exception as e:
-            error_msg = str(e).lower()
-            logging.debug(f"Driver {driver_name} failed for {ip}: {str(e)[:200]}")
-            
-            if "auth" in error_msg or "password" in error_msg or "authentication" in error_msg:
-                return "AUTH_FAIL", None
-            elif "connection refused" in error_msg or "channel closed" in error_msg:
-                # Try next driver
-                continue
-            elif "not found" in error_msg or "no driver" in error_msg:
-                # Driver name might not exist (like nxos_ssh)
-                continue
-            else:
-                continue
+            logging.debug(f"APIC check error on {self.ip}: {e}")
+            return None
 
-    return "UNREACHABLE", None
-
-def quick_apic_check(ip, username, password):
-    """Detect APIC by parsing 'show versions' and extracting controller hostname."""
-    try:
-
-        client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-
-        client.connect(
-            hostname=ip,
-            username=username,
-            password=password,
-            timeout=8,
-            banner_timeout=8,
-            auth_timeout=8
-        )
-        logging.console(f"Connected to {ip} for APIC check")
-
-        # Menggunakan cmd 'show versions' (format tabel Role/Pod/Node/Name/Version)
-        stdin, stdout, stderr = client.exec_command("show versions", timeout=5)
-        output = stdout.read().decode("utf-8", errors="ignore")
-
-        client.close()
-
-        hostname = None
-
+    def _parse_apic_output(self, output: str) -> Optional[str]:
+        """Parse APIC 'show versions' output to extract hostname."""
         for line in output.splitlines():
-            stripped = line.strip()
-            if not stripped:
+            line = line.strip()
+            if not line or line.startswith("Role") or all(ch in "- " for ch in line):
                 continue
-
             
-            low = stripped.lower()
-            if low.startswith("role"):
-                continue
-            if all(ch in "- " for ch in stripped):
-                continue
-
-            parts = stripped.split()
-            
+            parts = line.split()
             if len(parts) < 5:
                 continue
-
-            role = parts[0].lower()
-            if role != "controller":
-                continue
-
             
-            name_tokens = parts[3:-1]
-            if name_tokens:
-                hostname = " ".join(name_tokens)
-            else:
-                hostname = parts[3]
-
-            logging.info(
-                f"Detected APIC via 'show versions' on {ip} - Hostname: {hostname}"
-            )
-            return "apic", hostname
-
-        # Fallback: if tabel format has keyword APIC
-        lowered = output.lower()
-        if any(keyword in lowered for keyword in [
+            # Check if this line contains controller info
+            if parts[0].lower() == "controller":
+                # Extract hostname (typically in position 3)
+                name_tokens = parts[3:-1]
+                return " ".join(name_tokens) if name_tokens else parts[3]
+        
+        return None
+    
+    def _is_apic_by_keywords(self, output: str) -> bool:
+        """Check if output contains APIC-related keywords."""
+        apic_keywords = [
             "cisco apic",
             "application policy infrastructure controller",
             "aci fabric",
             "aci version"
-        ]):
-            logging.info(f"Detected APIC CLI output (fallback) on {ip}")
-            return "apic", "apic-controller"
+        ]
+        
+        lowered = output.lower()
+        return any(keyword in lowered for keyword in apic_keywords)
 
+    def _fast_detection(self) -> Optional[Tuple[str, str]]:
+        """Fast detection by trying only the most likely device types."""
+        
+        # Try the top 2-3 most common device types first
+        for device_type in self.DEVICE_PRIORITY[:3]:  # Only try first 3
+            result = self._quick_device_check(device_type)
+            if result:
+                return result
+        
         return None
-
-    except AuthenticationException:
-        return "AUTH_FAIL", None
-    except Exception as e:
-        logging.debug(f"APIC check error on {ip}: {e}")
+    
+    def _quick_device_check(self, device_type: str) -> Optional[Tuple[str, str]]:
+        """Quick check for a specific device type."""
+        try:
+            # Use minimal timeout for quick checks
+            device = {
+                'device_type': device_type,
+                'host': self.ip,
+                'username': self.username,
+                'password': self.password,
+                'timeout': 3,      # Reduced timeout
+                'session_timeout': 5,
+                'global_delay_factor': 0.5,  # Reduced delay
+                'fast_cli': True,  # Enable fast mode if supported
+            }
+            
+            # Special port adjustments
+            if device_type == 'juniper_junos':
+                device['port'] = 22  # Use SSH instead of NETCONF for speed
+            
+            conn = ConnectHandler(**device)
+            
+            # Quick version command
+            output = conn.send_command_timing("show version", delay_factor=0.5, max_loops=5)
+            
+            # Quick pattern matching
+            if self._match_device_pattern(device_type, output): # type: ignore
+                hostname = self._get_quick_hostname_from_conn(conn, device_type)
+                conn.disconnect()
+                logging.info(f"Quick detected {device_type} on {self.ip} - Hostname: {hostname}")
+                return device_type, hostname
+            
+            conn.disconnect()
+            
+        except Exception as e:
+            error_msg = str(e).lower()
+            if any(auth_term in error_msg for auth_term in ["auth", "password", "authentication"]):
+                return "AUTH_FAIL", None # type: ignore
+        
         return None
+    
+    def _match_device_pattern(self, device_type: str, output: str) -> bool:
+        """Quick pattern matching for device identification."""
+        if device_type in self.QUICK_PATTERNS:
+            patterns = self.QUICK_PATTERNS[device_type]
+            output_lower = output.lower()
+            return any(pattern.lower() in output_lower for pattern in patterns)
+        return False
+    
+    def _get_quick_hostname_from_conn(self, conn: BaseConnection, device_type: str) -> str:
+        """Get hostname quickly."""
+        try:
+            # Device-specific quick hostname commands
+            quick_hostname_cmds = {
+                'cisco_ios': 'show run | i hostname',
+                'cisco_nxos': 'show hostname',
+                'cisco_xe': 'show run | i hostname',
+                'arista_eos': 'show hostname',
+            }
+            
+            cmd = quick_hostname_cmds.get(device_type, 'show hostname')
+            output = conn.send_command_timing(cmd, delay_factor=0.5, max_loops=3)
+            
+            # Quick parsing
+            lines = output.strip().splitlines() # type: ignore
+            for line in lines:
+                if 'hostname' in line.lower():
+                    parts = line.split()
+                    if len(parts) > 1:
+                        return parts[1].strip()
+                elif line.strip() and not line.startswith('#'):
+                    return line.strip()
+            
+            return "Unknown"
+            
+        except:
+            return "Unknown"
+    
+    def _get_quick_hostname(self, ip: str, username: str, password: str) -> Optional[str]:
+        """Get hostname via quick SSH connection."""
+        try:
+            client = paramiko.SSHClient()
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            
+            client.connect(
+                hostname=ip,
+                username=username,
+                password=password,
+                timeout=3,
+                banner_timeout=3,
+                auth_timeout=3
+            )
+            
+            # Try common hostname commands
+            for cmd in ["show hostname", "hostname"]:
+                try:
+                    stdin, stdout, stderr = client.exec_command(cmd, timeout=2)
+                    output = stdout.read().decode("utf-8", errors="ignore").strip()
+                    if output:
+                        client.close()
+                        return output
+                except:
+                    continue
+            
+            client.close()
+            
+        except:
+            pass
+        
+        return None
+    
+    def _comprehensive_detection(self) -> Tuple[str, Optional[str]]:
+        """Comprehensive detection when quick methods fail."""
+        try:
+            # Use optimized SSHDetect
+            device = {
+                'device_type': 'autodetect',
+                'host': self.ip,
+                'username': self.username,
+                'password': self.password,
+                'timeout': 8,           # Balanced timeout
+                'auth_timeout': 8,
+                'banner_timeout': 8,
+                'session_timeout': 12,
+                'global_delay_factor': 1,
+            }
+            
+            guesser = SSHDetect(**device)
+            
+            # Reduce number of device types to try
+            guesser.device_type_priority = self.DEVICE_PRIORITY[:5]  # Only try top 5
+            
+            best_match = guesser.autodetect()
+            
+            if best_match:
+                # Get hostname with detected type
+                device['device_type'] = best_match
+                conn = ConnectHandler(**device)
+                
+                # Quick hostname retrieval
+                hostname = self._get_quick_hostname_from_conn(conn, best_match)
+                
+                conn.disconnect()
+                
+                logging.info(f"Detected {best_match} on {self.ip} - Hostname: {hostname}")
+                return best_match, hostname
+            
+            # If autodetect fails, check if device is reachable
+            if self._is_port_open(22):
+                return "UNKNOWN_SSH", None
+            else:
+                return "UNREACHABLE", None
+            
+        except AuthenticationException:
+            return "AUTH_FAIL", None
+        except Exception as e:
+            error_msg = str(e).lower()
+            logging.debug(f"Detection failed for {self.ip}: {error_msg[:100]}")
+            
+            if any(auth_term in error_msg for auth_term in ["auth", "password", "authentication"]):
+                return "AUTH_FAIL", None
+            elif any(conn_term in error_msg for conn_term in ["connection refused", "timeout", "unreachable"]):
+                return "UNREACHABLE", None
+            
+            return "UNKNOWN", None
+    
+    def _is_port_open(self, port: int) -> bool:
+        """Check if a port is open."""
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(2)
+            result = sock.connect_ex((self.ip, port))
+            sock.close()
+            return result == 0
+        except:
+            return False
 
-def try_nxos_ssh(ip, username, password):
-    """Try NX-OS using SSH (not Netconf)"""
-    try:
-        # Try using netmiko for SSH-based NX-OS detection
-        from netmiko import ConnectHandler
-        
-        device = {
-            'device_type': 'cisco_nxos',
-            'host': ip,
-            'username': username,
-            'password': password,
-            'timeout': 5,
-            'global_delay_factor': 1,
-        }
-        
-        connection = ConnectHandler(**device)
-        
-        # Get basic info
-        output = connection.send_command("show version", use_textfsm=True)
-        
-        if isinstance(output, list) and len(output) > 0:
-            # TextFSM parsed output
-            hostname = output[0].get('hostname', 'Unknown')
-            os_version = output[0].get('os', 'Unknown')
-        else:
-            # Raw output
-            hostname = "nxos-switch"
-            os_version = "NX-OS"
-            # Try to get hostname
-            hostname_output = connection.send_command("show hostname")
-            if hostname_output:
-                hostname = hostname_output.strip()
-        
-        connection.disconnect()
-        logging.info(f"Detected NX-OS via SSH on {ip} - Hostname: {hostname}")
-        return "nxos", hostname
-        
-    except Exception as e:
-        logging.debug(f"NX-OS SSH detection failed for {ip}: {str(e)[:100]}")
-        return None    
+
+def detect_os_type(ip: str, username: Optional[str] = None, password: Optional[str] = None) -> Tuple[str, Optional[str]]:
+    """
+    Detect the operating system type of a network device.
+    
+    Args:
+        ip: IP address of the device
+        username: SSH username
+        password: SSH password
+    
+    Returns:
+        Tuple containing (os_type, hostname) or (error_code, None)
+        Error codes: "AUTH_FAIL", "UNREACHABLE", "UNKNOWN_SSH"
+    """
+    detector = OSDetector(ip, username, password)
+    return detector.detect()
+
+
+# Optional: Add a caching mechanism for even faster detection
+_detection_cache = {}
+
+def detect_os_type_cached(ip: str, username: Optional[str] = None, password: Optional[str] = None) -> Tuple[str, Optional[str]]:
+    """Cached version of OS detection for repeated queries."""
+    cache_key = f"{ip}:{username}"
+    
+    if cache_key in _detection_cache:
+        return _detection_cache[cache_key]
+    
+    result = detect_os_type(ip, username, password)
+    
+    # Only cache successful detections
+    if result[0] not in ["AUTH_FAIL", "UNREACHABLE", "UNKNOWN_SSH"]:
+        _detection_cache[cache_key] = result
+    
+    return result
