@@ -5,6 +5,12 @@ from cryptography.fernet import Fernet
 from inventory.lib.credential_manager import save_credentials, load_credentials, load_key
 from inventory.lib.detect_os_type import detect_os_type
 
+from rich.console import Console
+from rich.prompt import Prompt
+from rich import print as rprint
+
+console = Console()
+
 
 INVENTORY_FILE = "inventory.csv"
 
@@ -31,16 +37,8 @@ def decrypt_value(value):
 # Main Logic Functions
 # ============================================================
 def create_inventory(username=None, password=None):
-    print("Create or Update Device Inventory")
-
-    username, password = load_credentials()
-
-    if not username or not password:
-        username = input("Username: ").strip()
-        password = getpass.getpass("Password: ")
-
-        if input("Save credentials? (y/n): ").lower() == "y":
-            save_credentials("default", username, password)
+    console.print("[bold]\n📋 Create or Update Device Inventory[/bold]")
+    console.rule(style="grey37")
 
     auto_fix_inventory(username, password)
 
@@ -51,18 +49,20 @@ def create_inventory(username=None, password=None):
 
         os_type, hostname = detect_os_type(ip, username, password)
 
-        if os_type == "AUTH_FAIL":
+        while os_type == "AUTH_FAIL":
             print("Wrong credentials. Try again.")
             username = input("Username: ").strip()
-            password = getpass.getpass("Password: ")
+            password = getpass.getpass("Password: ")  # Secure password input
             os_type, hostname = detect_os_type(ip, username, password)
-
+            
         if os_type and hostname:
+            print(f"Authentication successful! IP: {ip}")
             add_to_inventory(ip, hostname, os_type, username, password)
         else:
             print(f"Failed to detect OS for {ip}")
 
     print("Inventory saved.")
+    return username, password 
 
 def auto_fix_inventory(username, password):
     print("Checking inventory for incomplete entries...")

@@ -117,9 +117,13 @@ def main():
         elif choice == "2":
             username, password = load_credentials()
             if not username or not password:
-                print(
-                    "\n⚠️  No saved credentials found. Please save credentials first (option 1)."
-                )
+                console.print("[yellow]No saved credentials found[/yellow]")
+                slow_print("🔐 Saving credentials securely...", style="green")
+                username = input("Enter username: ").strip()
+                password = getpass.getpass("Enter Password (default hidden): ")
+                save_credentials("default", username, password)
+                slow_print("✅ Default Credentials saved successfully!")
+
                 pause()
                 continue
             slow_print("📋 Creating or updating inventory...", style="green")
