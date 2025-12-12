@@ -7,29 +7,27 @@ import logging
 import shutil
 import pyfiglet
 from datetime import datetime
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
+from cryptography.fernet import Fernet
+from netmiko import ConnectHandler
+from netmiko.exceptions import (
+    NetmikoTimeoutException,
+    NetmikoAuthenticationException,
+    SSHException
+)
 
 from inventory.lib.detect_os_type import detect_os_type
-
 from legacy.customer_context import get_customer_name
 from inventory.lib.credential_manager import load_key
-
-from napalm import get_network_driver
-from napalm.base.base import NetworkDriver
-
-from cryptography.fernet import Fernet
 
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-
 # CONSTANTS & INITIAL SETUP
 KEY_FILE = os.path.join("legacy/creds", "key.key")
 INVENTORY_FILE = "inventory.csv"
 BACKUP_DIR = "legacy/backup_config/output"
-
-
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -40,6 +38,42 @@ console = Console()
 GREEN = "\033[32m"
 RED = "\033[31m"
 RESET = "\033[0m"
+
+# Netmiko device type mapping for backup operations
+DEVICE_TYPE_MAP = {
+    'cisco_ios': 'cisco_ios',
+    'cisco_nxos': 'cisco_nxos',
+    'cisco_xe': 'cisco_ios',
+    'cisco_xr': 'cisco_xr',
+    'cisco_asa': 'cisco_asa',
+    'arista_eos': 'arista_eos',
+    'juniper_junos': 'juniper_junos',
+    'hp_procurve': 'hp_procurve',
+    'extreme_exos': 'extreme_exos',
+    'fortinet': 'fortinet',
+    'paloalto_panos': 'paloalto_panos',
+    'linux': 'linux',
+    'generic': 'generic',
+    'apic': 'cisco_nxos',  # APIC uses NX-OS like CLI
+}
+
+# Device-specific configuration commands
+CONFIG_COMMANDS = {
+    'cisco_ios': ['show running-config'],
+    'cisco_nxos': ['show running-config'],
+    'cisco_xr': ['show running-config'],
+    'cisco_asa': ['show running-config'],
+    'cisco_xe': ['show running-config'],
+    'arista_eos': ['show running-config'],
+    'juniper_junos': ['show configuration | display set'],
+    'hp_procurve': ['show running-config'],
+    'extreme_exos': ['show configuration'],
+    'fortinet': ['show full-configuration'],
+    'paloalto_panos': ['show config running'],
+    'linux': ['cat /etc/*release', 'hostname'],
+    'generic': ['show running-config'],
+    'apic': ['show running-config'],
+}
 
 
 # === UTILITY FUNCTIONS ===
@@ -75,52 +109,73 @@ def get_terminal_width(default=100):
     except:
         return default
 
+def decrypt_password(enc_password: str) -> str:
+    """Decrypt password using Fernet."""
+    if not enc_password or not enc_password.strip():
+        return ""
+    
+    try:
+        key = load_key()
+        fernet = Fernet(key)
+        return fernet.decrypt(enc_password.encode()).decode()
+    except Exception:
+        # If decryption fails, assume it's already plaintext
+        return enc_password
+
 # INVENTORY FUNCTIONS
 def load_inventory() -> List[Dict[str, str]]:
+    """Load devices from inventory CSV file."""
     devices = []
     try:
         with open(INVENTORY_FILE, "r") as csvfile:
-            reader = csv.reader(csvfile)
+            reader = csv.reader(csvfile, delimiter=";")
             for row in reader:
-                if not row:
+                if not row or len(row) < 5:
                     continue
 
-                # Split semicolon fields
-                fields = row[0].split(";")
-                fields += [""] * (5 - len(fields))
-
-                name, ip, os_type, username, password = fields
-
-                if "apic" in os_type:
+                # Ensure we have exactly 5 fields
+                while len(row) < 5:
+                    row.append("")
+                
+                name, ip, os_type, username, password = [field.strip() for field in row[:5]]
+                
+                # Skip empty rows or headers
+                if not ip or ip.lower() == "ip" or ip.lower() == "hostname":
                     continue
 
-                driver = row[1].strip() if len(row) > 1 else os_type
+                # Skip APIC devices if not supported in backup
+                if "apic" in os_type.lower():
+                    console.print(f"[yellow]⚠ Skipping APIC device {ip} - not supported in backup[/yellow]")
+                    continue
 
-                devices.append(
-                    {
-                        "name": name,
-                        "ip": ip,
-                        "os": os_type,
-                        "username": username,
-                        "password": password,
-                        "driver": driver,
-                    }
-                )
+                devices.append({
+                    "name": name or "Unknown",
+                    "ip": ip,
+                    "os": os_type,
+                    "username": username,
+                    "password": password,
+                    "hostname": name or "Unknown",  # Add hostname field
+                })
 
     except FileNotFoundError:
         console.print("[yellow]⚠ Inventory file missing[/yellow]")
+    except Exception as e:
+        console.print(f"[red]Error loading inventory: {e}[/red]")
 
     return devices
 
 def auto_update_inventory(
     devices: List[Dict[str, str]], username: str, password: str
 ) -> List[Dict[str, str]]:
+    """Auto-update device OS and hostname information."""
     updated = []
 
     for dev in devices:
         ip = dev["ip"]
-        user = dev["username"]
-        pwd = dev["password"]
+        
+        # Use stored credentials if available
+        user = dev.get("username") or username
+        pwd = decrypt_password(dev.get("password") or password)
 
         console.print(f"[cyan]🔍 Detecting OS for {ip}...[/cyan]")
 
@@ -138,121 +193,228 @@ def auto_update_inventory(
         )
 
         dev["os"] = os_type
-        dev["hostname"] = hostname
+        dev["hostname"] = hostname or dev.get("name", "Unknown")
+        dev["name"] = hostname or dev.get("name", "Unknown")
+        
+        # Update credentials if using global ones
+        if not dev.get("username"):
+            dev["username"] = username
+            dev["password"] = password
 
         updated.append(dev)
 
     return updated
 
-
-def connect_to_device(device: Dict[str, str]) -> NetworkDriver:
-    key = load_key()
-    fernet = Fernet(key)
-
+def connect_with_netmiko(device: Dict[str, str]) -> ConnectHandler:
+    """Connect to device using Netmiko."""
     ip = device["ip"]
-    driver_name = device["os"]
-    username = device.get("username")
-    enc_password = device.get("password")
-
-    # Validate credentials
-    if not username or not enc_password:
+    os_type = device["os"]
+    username = device.get("username", "")
+    enc_password = device.get("password", "")
+    
+    # Decrypt password
+    password = decrypt_password(enc_password)
+    
+    if not username or not password:
         raise ValueError(f"Missing username/password for {ip}")
-
+    
+    # Map OS type to Netmiko device type
+    device_type = DEVICE_TYPE_MAP.get(os_type, 'generic')
+    
+    # Device connection parameters
+    device_params = {
+        'device_type': device_type,
+        'host': ip,
+        'username': username,
+        'password': password,
+        'timeout': 15,
+        'session_timeout': 30,
+        'banner_timeout': 15,
+        'global_delay_factor': 1,
+    }
+    
+    # Device-specific adjustments
+    if device_type in ['cisco_ios', 'cisco_xe', 'cisco_asa']:
+        device_params['secret'] = password  # Enable mode password
+    elif device_type == 'juniper_junos':
+        device_params['port'] = 22  # SSH port
+    elif device_type == 'arista_eos':
+        device_params['global_delay_factor'] = 2  # Arista needs more delay
+    
     try:
-        driver = get_network_driver(driver_name)
-        conn = driver(
-            hostname=ip,
-            username=username,
-            password=fernet.decrypt(enc_password.encode()).decode(),
-            optional_args={"secret": fernet.decrypt(enc_password.encode()).decode()},
-        )
-        return conn
+        connection = ConnectHandler(**device_params)
+        return connection
+    except NetmikoAuthenticationException:
+        raise RuntimeError(f"Authentication failed for {ip}")
+    except NetmikoTimeoutException:
+        raise RuntimeError(f"Connection timeout for {ip}")
+    except SSHException as e:
+        raise RuntimeError(f"SSH error for {ip}: {str(e)}")
     except Exception as e:
-        # wrap with a more specific message
-        raise RuntimeError(f"Failed to connect to {ip}: {e}") from e
+        raise RuntimeError(f"Failed to connect to {ip}: {str(e)}")
 
+def get_device_hostname(connection: ConnectHandler, device_type: str) -> str:
+    """Get device hostname using Netmiko."""
+    try:
+        # Device-specific hostname commands
+        hostname_commands = {
+            'cisco_ios': 'show run | include hostname',
+            'cisco_nxos': 'show hostname',
+            'cisco_xr': 'show running-config hostname',
+            'cisco_xe': 'show run | include hostname',
+            'cisco_asa': 'show running-config hostname',
+            'arista_eos': 'show hostname',
+            'juniper_junos': 'show configuration system host-name',
+            'hp_procurve': 'show system',
+            'extreme_exos': 'show switch',
+            'fortinet': 'get system status',
+            'paloalto_panos': 'show system info',
+            'linux': 'hostname',
+            'generic': 'hostname',
+        }
+        
+        cmd = hostname_commands.get(device_type, 'show hostname')
+        output = connection.send_command(cmd, expect_string=r'#|\$|>', read_timeout=10)
+        
+        # Parse output based on device type
+        if device_type.startswith('cisco_'):
+            for line in output.splitlines():
+                if 'hostname' in line.lower():
+                    parts = line.split()
+                    if len(parts) > 1:
+                        return parts[1].strip()
+        elif device_type == 'arista_eos':
+            return output.strip()
+        elif device_type == 'juniper_junos':
+            for line in output.splitlines():
+                if 'host-name' in line:
+                    parts = line.split()
+                    if len(parts) > 1:
+                        return parts[1].strip(';').strip()
+        
+        # Generic fallback
+        lines = output.strip().splitlines()
+        if lines:
+            return lines[-1].strip()
+        
+        return "Unknown"
+        
+    except Exception:
+        return "Unknown"
 
 # === BACKUP FUNCTIONS ===
-def backup_configs(device, device_dir: str) -> None:
+def backup_configs(device: Dict[str, str], device_dir: str) -> None:
+    """Backup device configuration using Netmiko."""
     customer = get_customer_name()
     ip = device["ip"]
+    os_type = device["os"]
+    device_name = device.get("hostname", device.get("name", ip))
 
     try:
-        device_conn = connect_to_device(device)
-    except Exception as e:
-        logging.error(f"Failed to back up {ip}: {e}")
-        console.print(f"[red]❌ Error backing up {ip}: {e}[/red]")
-        return
-
-    try:
-        device_conn.open()
-        facts = device_conn.get_facts()
-        hostname = facts.get("hostname", ip)
-        configs = device_conn.get_config()
+        connection = connect_with_netmiko(device)
+        
+        # Get actual hostname from device
+        device_type = DEVICE_TYPE_MAP.get(os_type, 'generic')
+        actual_hostname = get_device_hostname(connection, device_type)
+        hostname = actual_hostname if actual_hostname != "Unknown" else device_name
+        
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-
-        for cfg_type, cfg_content in configs.items():
-            if cfg_content:
+        
+        # Get configuration commands for this device type
+        config_cmds = CONFIG_COMMANDS.get(device_type, ['show running-config'])
+        
+        for cmd in config_cmds:
+            try:
+                console.print(f"[cyan]📝 Running: {cmd} on {hostname}[/cyan]")
+                output = connection.send_command(
+                    cmd, 
+                    expect_string=r'#|\$|>',
+                    read_timeout=30,
+                    delay_factor=2
+                )
+                
+                # Create filename
+                cmd_name = cmd.replace(" ", "_").replace("-", "_")
                 filename = os.path.join(
                     device_dir,
-                    f"{customer}_{hostname}_{cfg_type}_{timestamp}.cfg"
+                    f"{customer}_{hostname}_{cmd_name}_{timestamp}.txt"
                 )
+                
+                # Write output to file
                 with open(filename, "w") as f:
-                    f.write(cfg_content) # type: ignore
-
-                logging.info(f"Backed up {cfg_type} for {hostname} to {filename}")
-                console.print(f"[cyan]💾 [{hostname}] {cfg_type} config saved to: {filename}[/cyan]")
-
-        device_conn.close()
-        logging.info(f"Backup completed for All Device")
+                    f.write(f"# Device: {hostname} ({ip})\n")
+                    f.write(f"# OS Type: {os_type}\n")
+                    f.write(f"# Command: {cmd}\n")
+                    f.write(f"# Timestamp: {timestamp}\n")
+                    f.write("#" * 60 + "\n\n")
+                    f.write(output)
+                
+                logging.info(f"Backed up {cmd} for {hostname} to {filename}")
+                console.print(f"[green]✓ [{hostname}] Config saved: {os.path.basename(filename)}[/green]")
+                
+            except Exception as e:
+                logging.error(f"Failed to execute {cmd} on {hostname}: {e}")
+                console.print(f"[yellow]⚠ Failed to execute {cmd} on {hostname}: {str(e)[:100]}[/yellow]")
+        
+        connection.disconnect()
+        logging.info(f"Backup completed for {hostname}")
                 
     except Exception as e:
         logging.error(f"Failed to back up {ip}: {e}")
         console.print(f"[red]❌ Error backing up {ip}: {e}[/red]")
 
-def backup_commands(
-    device: Dict[str, str], commands: List[str], device_dir: str
-) -> None:
+def backup_commands(device: Dict[str, str], commands: List[str], device_dir: str) -> None:
+    """Execute custom commands and save output."""
     customer = get_customer_name()
     ip = device["ip"]
+    device_name = device.get("hostname", device.get("name", ip))
 
-    logging.info(f"Connecting to {ip} for command execution...")
     try:
-        device_conn = connect_to_device(device)
-    except Exception as e:
-        logging.error(f"Failed to back up {ip}: {e}")
-        console.print(f"[red]❌ Error backing up {ip}: {e}[/red]")
-        return
-    try:
-        device_conn.open()
-
-        facts = device_conn.get_facts()
-        hostname = facts.get("hostname", ip)
+        connection = connect_with_netmiko(device)
+        
+        # Get actual hostname
+        os_type = device["os"]
+        device_type = DEVICE_TYPE_MAP.get(os_type, 'generic')
+        actual_hostname = get_device_hostname(connection, device_type)
+        hostname = actual_hostname if actual_hostname != "Unknown" else device_name
+        
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-
+        
         output_filename = os.path.join(
-            device_dir, f"{customer}_{hostname}_{timestamp}.txt"
+            device_dir, f"{customer}_{hostname}_commands_{timestamp}.txt"
         )
 
         with open(output_filename, "w") as f:
             f.write(f"### Command Backup for {hostname} ({ip}) ###\n")
             f.write(f"Timestamp: {timestamp}\n")
+            f.write(f"OS Type: {os_type}\n")
             f.write("=" * 60 + "\n\n")
 
             for cmd in commands:
-                logging.info(f"Running command on {hostname}: {cmd}")
-                output = device_conn.cli([cmd])[cmd]
-                f.write(f"$ {cmd}\n{output}\n{'-' * 60}\n\n")
+                try:
+                    console.print(f"[cyan]📝 Running: {cmd} on {hostname}[/cyan]")
+                    output = connection.send_command(
+                        cmd, 
+                        expect_string=r'#|\$|>',
+                        read_timeout=30,
+                        delay_factor=2
+                    )
+                    f.write(f"$ {cmd}\n{output}\n{'-' * 60}\n\n")
+                    logging.info(f"Executed {cmd} on {hostname}")
+                except Exception as e:
+                    error_msg = f"ERROR executing '{cmd}': {str(e)[:100]}"
+                    f.write(f"$ {cmd}\n{error_msg}\n{'-' * 60}\n\n")
+                    logging.error(f"Failed to execute {cmd} on {hostname}: {e}")
+                    console.print(f"[yellow]⚠ Failed: {cmd} on {hostname}[/yellow]")
 
-        console.print(f"[cyan]📄 [{hostname}] Command outputs saved to: {output_filename}[/cyan]")
+        console.print(f"[green]✓ [{hostname}] Command outputs saved to: {os.path.basename(output_filename)}[/green]")
 
-        device_conn.close()
+        connection.disconnect()
         logging.info(f"Command backup completed for {hostname}")
 
     except Exception as e:
-        logging.error(f"Failed to execute command on {ip}: {e}")
-        console.print(f"[red]❌ Error executing command on {ip}: {e}[/red]")
-
+        logging.error(f"Failed to execute commands on {ip}: {e}")
+        console.print(f"[red]❌ Error executing commands on {ip}: {e}[/red]")
 
 # === UI FUNCTIONS ===
 def print_header():
@@ -277,6 +439,8 @@ def print_menu() -> None:
         [bold]1.[/bold] Backup configurations
 
         [bold]2.[/bold] Both (configs + commands)
+
+        [bold]3.[/bold] Auto-update inventory
 
         [bold]q.[/bold] Exit
         """
@@ -306,6 +470,7 @@ def run_backup(
         )
         return
 
+    # Get credentials if not provided
     if not username:
         username = input("Enter username for backup: ").strip()
     if not password:
@@ -326,21 +491,21 @@ def run_backup(
 
         if choice == "1":
             slow_print(f"{green}\n⏳ Starting configuration backups...{reset}")
-            # Use Rich Progress
+            
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
-                transient=True,  # removes progress bar after completion
+                transient=True,
             ) as progress:        
                 for dev in devices:
-                    hostname = dev.get("name", "")
+                    hostname = dev.get("hostname", dev.get("name", ""))
                     if (
                         not dev.get("ip")
                         or not dev.get("username")
                         or not dev.get("password")
                         or not dev.get("os")
                     ):
-                        console.print("[yellow]⚠️ Device entry is not completed, please create or update the inventory first. [/yellow]")
+                        console.print(f"[yellow]⚠️ Device {hostname} entry is incomplete, skipping[/yellow]")
                         continue
 
                     task = progress.add_task(f"Backing up {hostname}...", start=False)
@@ -350,7 +515,7 @@ def run_backup(
                     ensure_dir(device_dir)
                     backup_configs(dev, device_dir)
                 
-                    progress.update(task, completed=1)  # mark as done
+                    progress.update(task, completed=1)
                     logging.info(f"Completed backup for {hostname}")
 
             print(f"{GREEN} ✅ All configuration backups completed.{RESET}")        
@@ -361,47 +526,76 @@ def run_backup(
                 "Enter command(s) separated by commas (e.g., 'show version,show interfaces'): "
             ).strip()
             commands = [cmd.strip() for cmd in raw_cmds.split(",") if cmd.strip()]
-            slow_print(f"{green}\n⏳ Starting configuration backups...{reset}")
             
-            # Use Rich Progress
+            if not commands:
+                console.print("[red]❌ No commands provided, skipping[/red]")
+                pause()
+                continue
+                
+            slow_print(f"{green}\n⏳ Starting configuration and command backups...{reset}")
+            
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
-                transient=True,  # removes progress bar after completion
+                transient=True,
             ) as progress:
                              
                 for dev in devices:
-                    hostname = dev.get("name", "")
+                    hostname = dev.get("hostname", dev.get("name", ""))
                     if (
                         not dev.get("ip")
                         or not dev.get("username")
                         or not dev.get("password")
                         or not dev.get("os")
                     ):
-                        console.print(
-                            "[yellow]⚠️ Device entry is not completed, please create or update the inventory first. [/yellow]"
-                        )
+                        console.print(f"[yellow]⚠️ Device {hostname} entry is incomplete, skipping[/yellow]")
                         continue
+                    
                     task = progress.add_task(f"Backing up {hostname}...", start=False)
                     progress.start_task(task)
 
                     device_dir = os.path.join(path, hostname)
                     ensure_dir(device_dir)
-                    backup_commands(dev, commands, device_dir)
+                    
+                    # Backup both configs and custom commands
                     backup_configs(dev, device_dir)
-                    progress.update(task, completed=2)  # mark as done
+                    backup_commands(dev, commands, device_dir)
+                    
+                    progress.update(task, completed=2)
+                    
+            pause()
+
+        elif choice == "3":
+            console.print("[cyan]🔄 Auto-updating inventory...[/cyan]")
+            devices = auto_update_inventory(devices, username, password)
+            
+            # Save updated inventory
+            try:
+                with open(INVENTORY_FILE, "w", newline="") as csvfile:
+                    writer = csv.writer(csvfile, delimiter=";")
+                    for dev in devices:
+                        writer.writerow([
+                            dev.get("name", ""),
+                            dev.get("ip", ""),
+                            dev.get("os", ""),
+                            dev.get("username", ""),
+                            dev.get("password", "")
+                        ])
+                console.print("[green]✅ Inventory updated and saved[/green]")
+            except Exception as e:
+                console.print(f"[red]❌ Error saving inventory: {e}[/red]")
+            
             pause()
 
         elif choice == "q":
             slow_print(f"{green}\nExit backup tools...{reset}")
             time.sleep(0.3)
-            print("✅ Goodbye! 👋")
+            console.print("✅ Goodbye! 👋")
             break
 
         else:
             console.print("[yellow]⚠️ Invalid choice, please try again.[/yellow]")
             pause()
-
 
 if __name__ == "__main__":
     run_backup()
