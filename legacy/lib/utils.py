@@ -15,16 +15,11 @@ from rich.console import Console
 from cryptography.fernet import Fernet
 from typing import Dict, List, Any, cast
 from legacy.customer_context import get_customer_name
+from inventory.lib.credential_manager import load_key
 
 KEY_FILE = os.path.join("inventory/lib", "key.key")
 
 console = Console()
-
-
-def load_key():
-    key_path = get_key_path(os.path.join("inventory", "lib", "key.key"))
-    with open(key_path, "rb") as key_file:
-        return key_file.read()
 
 
 def map_os_to_device_type(os_type: str) -> str:

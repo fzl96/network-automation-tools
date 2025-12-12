@@ -25,7 +25,7 @@ from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
 # CONSTANTS & INITIAL SETUP
-KEY_FILE = os.path.join("legacy/creds", "key.key")
+KEY_FILE = os.path.join("inventory/lib", "key.key")
 INVENTORY_FILE = "inventory.csv"
 BACKUP_DIR = "legacy/backup_config/output"
 
