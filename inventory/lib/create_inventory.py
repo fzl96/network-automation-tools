@@ -6,12 +6,14 @@ from inventory.lib.credential_manager import save_credentials, load_credentials,
 from inventory.lib.detect_os_type import detect_os_type
 
 from rich.console import Console
-from rich.prompt import Prompt
-from rich import print as rprint
+from pathlib import Path
+import sys
 
 console = Console()
 
-INVENTORY_FILE = "inventory.csv"
+from inventory.lib.path import inventory_path
+
+INVENTORY_FILE = inventory_path()
 
 # ============================================================
 # Encryption / Decryption Functions

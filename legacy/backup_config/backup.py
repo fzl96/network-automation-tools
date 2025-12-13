@@ -104,7 +104,9 @@ def decrypt_password(enc_password: str) -> str:
         return enc_password
 
 # INVENTORY FUNCTIONS
-def load_inventory(file="inventory.csv"):
+from inventory.lib.path import inventory_path
+def load_inventory(file=None):
+    file = inventory_path() if file is None else file
     devices = []
     try:
         with open(file, "r") as csvfile:

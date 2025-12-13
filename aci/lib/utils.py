@@ -6,8 +6,9 @@ from requests.cookies import RequestsCookieJar
 from cryptography.fernet import Fernet
 from inventory.lib.credential_manager import load_key
 
-
-def load_devices(file="inventory.csv"):
+from inventory.lib.path import inventory_path
+def load_devices(file=None):
+    file = inventory_path() if file is None else file
     devices = []
     try:
         with open(file, "r") as f:

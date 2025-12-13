@@ -19,6 +19,30 @@ KEY_FILE = os.path.join("inventory/lib", "key.key")
 
 console = Console()
 
+def parse_vrfs(output_text):
+    vrfs = []
+    
+    header_keywords = ["Name", "VRF-Name", "VRF-ID", "Default", "Protocols", "State", "Reason"]
+    
+    for line in output_text.splitlines():
+        stripped_line = line.strip()
+        
+        if not stripped_line:
+            continue
+            
+        if stripped_line.endswith('#') or 'show vrf' in line:
+            continue
+            
+        leading_spaces = len(line) - len(line.lstrip())
+        if leading_spaces > 10:
+            continue
+        first_word = stripped_line.split()[0]
+        if first_word in header_keywords:
+            continue
+            
+        vrfs.append(first_word)
+            
+    return vrfs
 
 def connect_to_device(creds):
     key = load_key()
@@ -305,13 +329,15 @@ def show_ip_route(conn: BaseConnection, device_type: str):
                     }
                 )
 
-        vrfs = conn.send_command("show vrf", use_textfsm=False)
+        vrfs_raw = conn.send_command("show vrf", use_textfsm=False)
+        vrfs = parse_vrfs(vrfs_raw)
+
 
         if not isinstance(vrfs, list):
             return routes
 
         for vrf in vrfs:
-            vrf_name = vrf.get("name")
+            vrf_name = vrf
 
             if not vrf_name:
                 continue
@@ -379,13 +405,14 @@ def show_arp(conn: BaseConnection, device_type: str):
                     }
                 )
 
-        vrfs = conn.send_command("show vrf", use_textfsm=False)
+        vrfs_raw = conn.send_command("show vrf", use_textfsm=False)
+        vrfs = parse_vrfs(vrfs_raw)
 
         if not isinstance(vrfs, list):
             return arp
 
         for vrf in vrfs:
-            vrf_name = vrf.get("name")
+            vrf_name = vrf
 
             if not vrf_name:
                 continue
@@ -518,8 +545,9 @@ def collect_devices_data(base_dir=None):
         ) as f:
             f.write(data)
 
-
-def load_devices(file="inventory.csv"):
+from inventory.lib.path import inventory_path
+def load_devices(file=None):
+    file = inventory_path() if file is None else file
     devices = []
     try:
         with open(file, "r") as f:
