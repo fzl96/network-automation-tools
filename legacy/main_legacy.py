@@ -21,7 +21,14 @@ console = Console()
 # ============================================================
 # Utility Functions
 # ============================================================
-
+def get_app_directory():
+    """Get the directory where the app is located"""
+    if getattr(sys, 'frozen', False):
+        # Running as PyInstaller executable
+        return os.path.dirname(sys.executable)
+    else:
+        # Running as script
+        return os.path.dirname(os.path.abspath(__file__))
 
 def clear_screen():
     """Clear terminal screen for clean display"""
@@ -99,10 +106,8 @@ def show_menu():
 # ============================================================
 # Main Logic
 # ============================================================
-
-
 def main():
-    base_dir = None
+    base_dir = get_app_directory()
     while True:
         print_header()
         show_menu()
@@ -111,15 +116,9 @@ def main():
         choice = console.input(prompt_text).strip().lower()
 
         if choice == "1":
-            username, password = load_credentials()
-            if not username or not password:
-                print(
-                    "\n⚠️  No saved credentials found. Please save credentials first (option 1)."
-                )
-                pause()
-                continue
             slow_print("Launching Backup Config Tools...", style="green")
-            run_backup(username, password)
+            run_backup(base_dir)
+            pause()
 
         elif choice == "2":
             slow_print("⏳ Taking snapshots and health check...", style="green")            

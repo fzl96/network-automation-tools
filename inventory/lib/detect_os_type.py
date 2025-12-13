@@ -59,7 +59,7 @@ class OSDetector:
         return self._comprehensive_detection()
     
     def _detect_apic(self) -> Optional[Tuple[str, str]]:
-        """Detect APIC by parsing 'show versions' output."""
+        """Detect APIC by parsing 'show version' output."""
         try:
             client = paramiko.SSHClient()
             client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -76,7 +76,7 @@ class OSDetector:
             logging.debug(f"Connected to {self.ip} for APIC check")
             
             # Execute command to get version info
-            stdin, stdout, stderr = client.exec_command("show versions", timeout=5)
+            stdin, stdout, stderr = client.exec_command("show version", timeout=5)
             output = stdout.read().decode("utf-8", errors="ignore")
             client.close()
             
@@ -101,23 +101,36 @@ class OSDetector:
             return None
 
     def _parse_apic_output(self, output: str) -> Optional[str]:
-        """Parse APIC 'show versions' output to extract hostname."""
-        for line in output.splitlines():
-            line = line.strip()
-            if not line or line.startswith("Role") or all(ch in "- " for ch in line):
-                continue
-            
-            parts = line.split()
-            if len(parts) < 5:
-                continue
-            
-            # Check if this line contains controller info
-            if parts[0].lower() == "controller":
-                # Extract hostname (typically in position 3)
-                name_tokens = parts[3:-1]
-                return " ".join(name_tokens) if name_tokens else parts[3]
-        
-        return None
+            """Parse APIC 'show versions' output to extract hostname."""
+            for line in output.splitlines():
+                line = line.strip()
+                low = line.lower()
+
+                # Skip empty lines, headers (Standard & NX-OS), and separators
+                if (
+                    not line
+                    or low.startswith("role")
+                    or low.startswith("node type")
+                    or all(ch in "- " for ch in line)
+                ):
+                    continue
+
+                parts = line.split()
+
+                # We need at least 4 columns to match either format
+                if len(parts) < 4:
+                    continue
+
+                # Check if this line contains controller info
+                if parts[0].lower() == "controller":
+                    if len(parts) >= 5:
+                        name_tokens = parts[3:-1]
+                        return " ".join(name_tokens) if name_tokens else parts[3]
+
+                    elif len(parts) == 4:
+                        return parts[2]
+
+            return None
     
     def _is_apic_by_keywords(self, output: str) -> bool:
         """Check if output contains APIC-related keywords."""

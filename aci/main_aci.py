@@ -22,7 +22,15 @@ customer_name = get_customer_name()
 # ============================================================
 # Utility Functions
 # ============================================================
-
+def get_app_directory():
+    """Get the directory where the app is located"""
+    if getattr(sys, 'frozen', False):
+        # Running as PyInstaller executable
+        return os.path.dirname(sys.executable)
+    else:
+        # Running as script
+        return os.path.dirname(os.path.abspath(__file__))
+    
 def clear_screen():
     """Clear the terminal screen."""
     os.system("cls" if os.name == "nt" else "clear")
@@ -100,7 +108,7 @@ def show_menu():
     )
 
 def main():
-    base_dir = None
+    base_dir = get_app_directory()
 
     while True:
         print_header()

@@ -16,7 +16,6 @@ from netmiko.exceptions import (
     SSHException
 )
 
-from inventory.lib.detect_os_type import detect_os_type
 from legacy.customer_context import get_customer_name
 from inventory.lib.credential_manager import load_key
 
@@ -26,8 +25,6 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 
 # CONSTANTS & INITIAL SETUP
 KEY_FILE = os.path.join("inventory/lib", "key.key")
-INVENTORY_FILE = "inventory.csv"
-BACKUP_DIR = "legacy/backup_config/output"
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -46,15 +43,7 @@ DEVICE_TYPE_MAP = {
     'cisco_xe': 'cisco_ios',
     'cisco_xr': 'cisco_xr',
     'cisco_asa': 'cisco_asa',
-    'arista_eos': 'arista_eos',
-    'juniper_junos': 'juniper_junos',
-    'hp_procurve': 'hp_procurve',
-    'extreme_exos': 'extreme_exos',
-    'fortinet': 'fortinet',
-    'paloalto_panos': 'paloalto_panos',
-    'linux': 'linux',
     'generic': 'generic',
-    'apic': 'cisco_nxos',  # APIC uses NX-OS like CLI
 }
 
 # Device-specific configuration commands
@@ -64,15 +53,7 @@ CONFIG_COMMANDS = {
     'cisco_xr': ['show running-config'],
     'cisco_asa': ['show running-config'],
     'cisco_xe': ['show running-config'],
-    'arista_eos': ['show running-config'],
-    'juniper_junos': ['show configuration | display set'],
-    'hp_procurve': ['show running-config'],
-    'extreme_exos': ['show configuration'],
-    'fortinet': ['show full-configuration'],
-    'paloalto_panos': ['show config running'],
-    'linux': ['cat /etc/*release', 'hostname'],
     'generic': ['show running-config'],
-    'apic': ['show running-config'],
 }
 
 
@@ -123,21 +104,16 @@ def decrypt_password(enc_password: str) -> str:
         return enc_password
 
 # INVENTORY FUNCTIONS
-def load_inventory() -> List[Dict[str, str]]:
-    """Load devices from inventory CSV file."""
+def load_inventory(file="inventory.csv"):
     devices = []
     try:
-        with open(INVENTORY_FILE, "r") as csvfile:
+        with open(file, "r") as csvfile:
             reader = csv.reader(csvfile, delimiter=";")
             for row in reader:
-                if not row or len(row) < 5:
+                if len(row) != 5:
                     continue
 
-                # Ensure we have exactly 5 fields
-                while len(row) < 5:
-                    row.append("")
-                
-                name, ip, os_type, username, password = [field.strip() for field in row[:5]]
+                hostname, ip, os_type, username, password = row
                 
                 # Skip empty rows or headers
                 if not ip or ip.lower() == "ip" or ip.lower() == "hostname":
@@ -149,12 +125,11 @@ def load_inventory() -> List[Dict[str, str]]:
                     continue
 
                 devices.append({
-                    "name": name or "Unknown",
+                    "hostname": hostname or "Unknown",
                     "ip": ip,
                     "os": os_type,
                     "username": username,
                     "password": password,
-                    "hostname": name or "Unknown",  # Add hostname field
                 })
 
     except FileNotFoundError:
@@ -164,56 +139,15 @@ def load_inventory() -> List[Dict[str, str]]:
 
     return devices
 
-def auto_update_inventory(
-    devices: List[Dict[str, str]], username: str, password: str
-) -> List[Dict[str, str]]:
-    """Auto-update device OS and hostname information."""
-    updated = []
-
-    for dev in devices:
-        ip = dev["ip"]
-        
-        # Use stored credentials if available
-        user = dev.get("username") or username
-        pwd = decrypt_password(dev.get("password") or password)
-
-        console.print(f"[cyan]🔍 Detecting OS for {ip}...[/cyan]")
-
-        os_type, hostname = detect_os_type(ip, user, pwd)
-
-        if os_type in ("AUTH_FAIL", "UNREACHABLE"):
-            console.print(
-                f"[red]❌ OS detection failed for {ip} — keeping original[/red]"
-            )
-            updated.append(dev)
-            continue
-
-        console.print(
-            f"[green]✔ {ip} detected as {os_type}, hostname {hostname}[/green]"
-        )
-
-        dev["os"] = os_type
-        dev["hostname"] = hostname or dev.get("name", "Unknown")
-        dev["name"] = hostname or dev.get("name", "Unknown")
-        
-        # Update credentials if using global ones
-        if not dev.get("username"):
-            dev["username"] = username
-            dev["password"] = password
-
-        updated.append(dev)
-
-    return updated
-
 def connect_with_netmiko(device: Dict[str, str]) -> ConnectHandler:
     """Connect to device using Netmiko."""
     ip = device["ip"]
     os_type = device["os"]
     username = device.get("username", "")
-    enc_password = device.get("password", "")
+    password = device.get("password", "")
     
     # Decrypt password
-    password = decrypt_password(enc_password)
+    password = decrypt_password(password)
     
     if not username or not password:
         raise ValueError(f"Missing username/password for {ip}")
@@ -253,54 +187,7 @@ def connect_with_netmiko(device: Dict[str, str]) -> ConnectHandler:
     except Exception as e:
         raise RuntimeError(f"Failed to connect to {ip}: {str(e)}")
 
-def get_device_hostname(connection: ConnectHandler, device_type: str) -> str:
-    """Get device hostname using Netmiko."""
-    try:
-        # Device-specific hostname commands
-        hostname_commands = {
-            'cisco_ios': 'show run | include hostname',
-            'cisco_nxos': 'show hostname',
-            'cisco_xr': 'show running-config hostname',
-            'cisco_xe': 'show run | include hostname',
-            'cisco_asa': 'show running-config hostname',
-            'arista_eos': 'show hostname',
-            'juniper_junos': 'show configuration system host-name',
-            'hp_procurve': 'show system',
-            'extreme_exos': 'show switch',
-            'fortinet': 'get system status',
-            'paloalto_panos': 'show system info',
-            'linux': 'hostname',
-            'generic': 'hostname',
-        }
-        
-        cmd = hostname_commands.get(device_type, 'show hostname')
-        output = connection.send_command(cmd, expect_string=r'#|\$|>', read_timeout=10)
-        
-        # Parse output based on device type
-        if device_type.startswith('cisco_'):
-            for line in output.splitlines():
-                if 'hostname' in line.lower():
-                    parts = line.split()
-                    if len(parts) > 1:
-                        return parts[1].strip()
-        elif device_type == 'arista_eos':
-            return output.strip()
-        elif device_type == 'juniper_junos':
-            for line in output.splitlines():
-                if 'host-name' in line:
-                    parts = line.split()
-                    if len(parts) > 1:
-                        return parts[1].strip(';').strip()
-        
-        # Generic fallback
-        lines = output.strip().splitlines()
-        if lines:
-            return lines[-1].strip()
-        
-        return "Unknown"
-        
-    except Exception:
-        return "Unknown"
+
 
 # === BACKUP FUNCTIONS ===
 def backup_configs(device: Dict[str, str], device_dir: str) -> None:
@@ -308,17 +195,13 @@ def backup_configs(device: Dict[str, str], device_dir: str) -> None:
     customer = get_customer_name()
     ip = device["ip"]
     os_type = device["os"]
-    device_name = device.get("hostname", device.get("name", ip))
+    hostname = device.get("hostname")
 
     try:
         connection = connect_with_netmiko(device)
-        
-        # Get actual hostname from device
         device_type = DEVICE_TYPE_MAP.get(os_type, 'generic')
-        actual_hostname = get_device_hostname(connection, device_type)
-        hostname = actual_hostname if actual_hostname != "Unknown" else device_name
         
-        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M")
         
         # Get configuration commands for this device type
         config_cmds = CONFIG_COMMANDS.get(device_type, ['show running-config'])
@@ -326,28 +209,21 @@ def backup_configs(device: Dict[str, str], device_dir: str) -> None:
         for cmd in config_cmds:
             try:
                 console.print(f"[cyan]📝 Running: {cmd} on {hostname}[/cyan]")
-                output = connection.send_command(
+                data = connection.send_command(
                     cmd, 
                     expect_string=r'#|\$|>',
                     read_timeout=30,
                     delay_factor=2
                 )
                 
-                # Create filename
-                cmd_name = cmd.replace(" ", "_").replace("-", "_")
-                filename = os.path.join(
-                    device_dir,
-                    f"{customer}_{hostname}_{cmd_name}_{timestamp}.txt"
-                )
+                # Create a simple filename
+                filename = f"{customer}_{hostname}_command_{timestamp}.txt"
+                filepath = os.path.join(device_dir, filename)
                 
-                # Write output to file
-                with open(filename, "w") as f:
-                    f.write(f"# Device: {hostname} ({ip})\n")
-                    f.write(f"# OS Type: {os_type}\n")
-                    f.write(f"# Command: {cmd}\n")
-                    f.write(f"# Timestamp: {timestamp}\n")
-                    f.write("#" * 60 + "\n\n")
-                    f.write(output)
+                # Write to file
+                with open(filepath, "w") as f:
+                    f.write(f"# {hostname} | {customer} | {timestamp}\n\n")
+                    f.write(data)
                 
                 logging.info(f"Backed up {cmd} for {hostname} to {filename}")
                 console.print(f"[green]✓ [{hostname}] Config saved: {os.path.basename(filename)}[/green]")
@@ -367,18 +243,12 @@ def backup_commands(device: Dict[str, str], commands: List[str], device_dir: str
     """Execute custom commands and save output."""
     customer = get_customer_name()
     ip = device["ip"]
-    device_name = device.get("hostname", device.get("name", ip))
+    hostname = device.get("hostname")
+    os_type = device["os"]
 
     try:
         connection = connect_with_netmiko(device)
-        
-        # Get actual hostname
-        os_type = device["os"]
-        device_type = DEVICE_TYPE_MAP.get(os_type, 'generic')
-        actual_hostname = get_device_hostname(connection, device_type)
-        hostname = actual_hostname if actual_hostname != "Unknown" else device_name
-        
-        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M")
         
         output_filename = os.path.join(
             device_dir, f"{customer}_{hostname}_commands_{timestamp}.txt"
@@ -440,8 +310,6 @@ def print_menu() -> None:
 
         [bold]2.[/bold] Both (configs + commands)
 
-        [bold]3.[/bold] Auto-update inventory
-
         [bold]q.[/bold] Exit
         """
     console.print(
@@ -455,11 +323,8 @@ def print_menu() -> None:
     )    
 
 # === MAIN LOGIC ===
-def run_backup(
-    username: Optional[str] = None,
-    password: Optional[str] = None,
-    base_dir: Optional[str] = None,
-) -> None:
+def run_backup(base_dir= None):
+    
     """Main function to handle user menu and backup options."""
     devices = load_inventory()
     customer = get_customer_name()
@@ -470,11 +335,12 @@ def run_backup(
         )
         return
 
-    # Get credentials if not provided
-    if not username:
-        username = input("Enter username for backup: ").strip()
-    if not password:
-        password = input("Enter password: ").strip()
+    # Get Directory for backups
+    if base_dir:
+        path = os.path.join(base_dir, customer, "legacy", "backup")
+    else:
+        path = os.path.join("results", customer, "legacy", "backup")
+    os.makedirs(path, exist_ok=True)
 
     while True:
         print_header()
@@ -483,11 +349,6 @@ def run_backup(
         reset = "\033[0m"        
 
         choice = input("\nEnter your choice: ").strip().lower()
-
-        if base_dir:
-            path = os.path.join(base_dir, customer, "legacy", "backup")
-        else:
-            path = os.path.join("results", customer, "legacy", "backup")
 
         if choice == "1":
             slow_print(f"{green}\n⏳ Starting configuration backups...{reset}")
@@ -498,7 +359,7 @@ def run_backup(
                 transient=True,
             ) as progress:        
                 for dev in devices:
-                    hostname = dev.get("hostname", dev.get("name", ""))
+                    hostname = dev.get("hostname")
                     if (
                         not dev.get("ip")
                         or not dev.get("username")
@@ -516,7 +377,7 @@ def run_backup(
                     backup_configs(dev, device_dir)
                 
                     progress.update(task, completed=1)
-                    logging.info(f"Completed backup for {hostname}")
+                    logging.info(f"Completed backup for {hostname} save in {device_dir}")
 
             print(f"{GREEN} ✅ All configuration backups completed.{RESET}")        
             pause()
@@ -534,6 +395,16 @@ def run_backup(
                 
             slow_print(f"{green}\n⏳ Starting configuration and command backups...{reset}")
             
+            # Get Directory for backups
+            if base_dir:
+                path = os.path.join(base_dir, customer, "legacy", "backup")
+            else:
+                path = os.path.join("results", customer, "legacy", "backup")
+            os.makedirs(path, exist_ok=True)
+            
+            # Log the backup directory path
+            logging.info(f"Backup path: {path}")
+
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
@@ -563,28 +434,6 @@ def run_backup(
                     
                     progress.update(task, completed=2)
                     
-            pause()
-
-        elif choice == "3":
-            console.print("[cyan]🔄 Auto-updating inventory...[/cyan]")
-            devices = auto_update_inventory(devices, username, password)
-            
-            # Save updated inventory
-            try:
-                with open(INVENTORY_FILE, "w", newline="") as csvfile:
-                    writer = csv.writer(csvfile, delimiter=";")
-                    for dev in devices:
-                        writer.writerow([
-                            dev.get("name", ""),
-                            dev.get("ip", ""),
-                            dev.get("os", ""),
-                            dev.get("username", ""),
-                            dev.get("password", "")
-                        ])
-                console.print("[green]✅ Inventory updated and saved[/green]")
-            except Exception as e:
-                console.print(f"[red]❌ Error saving inventory: {e}[/red]")
-            
             pause()
 
         elif choice == "q":
