@@ -164,6 +164,7 @@ class OSDetector:
                 'host': self.ip,
                 'username': self.username,
                 'password': self.password,
+                'secret': self.password,
                 'timeout': 3,      # Reduced timeout
                 'session_timeout': 5,
                 'global_delay_factor': 0.5,  # Reduced delay
@@ -175,6 +176,7 @@ class OSDetector:
                 device['port'] = 22  # Use SSH instead of NETCONF for speed
             
             conn = ConnectHandler(**device)
+            conn.enable()
             
             # Quick version command
             output = conn.send_command_timing("show version", delay_factor=0.5, max_loops=5)
