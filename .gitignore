@@ -12,3 +12,5 @@ connect_error.csv
 /build
 dist/main.exe
 main.spec
+/dist/
+/build/
