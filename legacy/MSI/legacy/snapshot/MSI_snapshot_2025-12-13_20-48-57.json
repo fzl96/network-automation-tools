@@ -1,0 +1,26 @@
+{
+  "MSI-SF-ACS-01": {
+    "health_check": {
+      "hostname": "MSI-SF-ACS-01",
+      "uptime": "",
+      "version": "",
+      "cpu_utilization": "17%",
+      "memory_utilization": "10.01%",
+      "storage_utilization": "0%",
+      "temperature": "OK",
+      "fan_status": [
+        "OK",
+        "NOT PRESENT"
+      ],
+      "psu_status": [
+        "OK"
+      ]
+    },
+    "interfaces": [],
+    "mac_address_table": [],
+    "routing_table": null,
+    "arp_table": null,
+    "logs": [],
+    "parsed_logs": []
+  }
+}

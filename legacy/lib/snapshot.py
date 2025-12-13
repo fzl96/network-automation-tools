@@ -1,9 +1,7 @@
-import copy
 import json
 import os
 import re
 from datetime import datetime
-
 from legacy.lib.utils import (
     load_devices,
     show_version,

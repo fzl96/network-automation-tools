@@ -1,10 +1,8 @@
 import sys
-import json
 import csv
 import os
 import re
 from datetime import datetime
-import time
 from netmiko import (
     ConnectHandler,
     NetMikoTimeoutException,
@@ -72,7 +70,7 @@ def show_version(conn: BaseConnection, device_type: str):
 
         return data
     except Exception as e:
-        print(f"Errors: {e}")
+        #print(f"Errors: {e}")
         return {}
 
 
@@ -165,7 +163,7 @@ def show_resources(conn: BaseConnection, device_type: str):
         }
 
     except Exception as e:
-        print(f"Errors: {e}")
+        #print(f"Errors: {e}")
         return {}
 
 
@@ -206,7 +204,7 @@ def show_interface(conn: BaseConnection) -> List[Item]:
         return filtered
 
     except Exception as e:
-        print(f"Errors: {e}")
+        #print(f"Errors: {e}")
         return []
 
 
@@ -265,7 +263,7 @@ def show_mac_address_table(
         return normalized
 
     except Exception as e:
-        print(f"Errors: {e}")
+        #print(f"Errors: {e}")
         return []
 
 
@@ -307,7 +305,7 @@ def show_ip_route(conn: BaseConnection, device_type: str):
                     }
                 )
 
-        vrfs = conn.send_command("show vrf", use_textfsm=True)
+        vrfs = conn.send_command("show vrf", use_textfsm=False)
 
         if not isinstance(vrfs, list):
             return routes
@@ -381,7 +379,7 @@ def show_arp(conn: BaseConnection, device_type: str):
                     }
                 )
 
-        vrfs = conn.send_command("show vrf", use_textfsm=True)
+        vrfs = conn.send_command("show vrf", use_textfsm=False)
 
         if not isinstance(vrfs, list):
             return arp
