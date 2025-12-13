@@ -2,10 +2,10 @@
   "MSI-SF-ACS-01": {
     "health_check": {
       "hostname": "MSI-SF-ACS-01",
-      "uptime": "14 weeks, 7 hours, 51 minutes",
+      "uptime": "14 weeks, 9 hours, 1 minute",
       "version": "12.2(53)SE2",
-      "cpu_utilization": "18%",
-      "memory_utilization": "10.04%",
+      "cpu_utilization": "19%",
+      "memory_utilization": "10.01%",
       "storage_utilization": "0%",
       "temperature": "OK",
       "fan_status": [
@@ -765,18 +765,6 @@
       },
       {
         "vlan_id": "65",
-        "mac_address": "0050.5681.64de",
-        "type": "DYNAMIC",
-        "ports": "Po1"
-      },
-      {
-        "vlan_id": "65",
-        "mac_address": "0050.5681.8593",
-        "type": "DYNAMIC",
-        "ports": "Po1"
-      },
-      {
-        "vlan_id": "65",
         "mac_address": "00a0.98ba.9d94",
         "type": "DYNAMIC",
         "ports": "Po1"
@@ -933,18 +921,6 @@
       },
       {
         "vlan_id": "66",
-        "mac_address": "0050.5661.eae0",
-        "type": "DYNAMIC",
-        "ports": "Po1"
-      },
-      {
-        "vlan_id": "66",
-        "mac_address": "0050.5662.358d",
-        "type": "DYNAMIC",
-        "ports": "Po1"
-      },
-      {
-        "vlan_id": "66",
         "mac_address": "0050.5681.17d4",
         "type": "DYNAMIC",
         "ports": "Gi0/10"
@@ -1089,12 +1065,6 @@
       },
       {
         "vlan_id": "53",
-        "mac_address": "000c.2993.c53e",
-        "type": "DYNAMIC",
-        "ports": "Po1"
-      },
-      {
-        "vlan_id": "53",
         "mac_address": "0022.bdf8.19ff",
         "type": "DYNAMIC",
         "ports": "Po1"
@@ -1107,19 +1077,7 @@
       },
       {
         "vlan_id": "53",
-        "mac_address": "0050.5681.0bc9",
-        "type": "DYNAMIC",
-        "ports": "Po1"
-      },
-      {
-        "vlan_id": "53",
-        "mac_address": "0050.5681.1030",
-        "type": "DYNAMIC",
-        "ports": "Po1"
-      },
-      {
-        "vlan_id": "53",
-        "mac_address": "0050.5681.3109",
+        "mac_address": "0050.5681.234e",
         "type": "DYNAMIC",
         "ports": "Po1"
       },
@@ -1149,6 +1107,12 @@
       },
       {
         "vlan_id": "53",
+        "mac_address": "0050.5681.4394",
+        "type": "DYNAMIC",
+        "ports": "Po1"
+      },
+      {
+        "vlan_id": "53",
         "mac_address": "0050.5681.4beb",
         "type": "DYNAMIC",
         "ports": "Po1"
@@ -1161,19 +1125,19 @@
       },
       {
         "vlan_id": "53",
-        "mac_address": "0050.5681.6539",
+        "mac_address": "0050.5681.630e",
+        "type": "DYNAMIC",
+        "ports": "Po1"
+      },
+      {
+        "vlan_id": "53",
+        "mac_address": "0050.5681.6c17",
         "type": "DYNAMIC",
         "ports": "Po1"
       },
       {
         "vlan_id": "53",
         "mac_address": "0050.5681.6ccc",
-        "type": "DYNAMIC",
-        "ports": "Po1"
-      },
-      {
-        "vlan_id": "53",
-        "mac_address": "0050.5681.6fb7",
         "type": "DYNAMIC",
         "ports": "Po1"
       },
@@ -1197,25 +1161,13 @@
       },
       {
         "vlan_id": "53",
-        "mac_address": "0050.5681.8675",
-        "type": "DYNAMIC",
-        "ports": "Po1"
-      },
-      {
-        "vlan_id": "53",
-        "mac_address": "0050.5681.8a6c",
-        "type": "DYNAMIC",
-        "ports": "Po1"
-      },
-      {
-        "vlan_id": "53",
         "mac_address": "0050.5681.8f3a",
         "type": "DYNAMIC",
         "ports": "Po1"
       },
       {
         "vlan_id": "53",
-        "mac_address": "0050.5681.8f3b",
+        "mac_address": "0050.5681.92e2",
         "type": "DYNAMIC",
         "ports": "Po1"
       },
@@ -1245,19 +1197,19 @@
       },
       {
         "vlan_id": "53",
-        "mac_address": "0050.5681.a7f8",
+        "mac_address": "0050.5681.a237",
+        "type": "DYNAMIC",
+        "ports": "Po1"
+      },
+      {
+        "vlan_id": "53",
+        "mac_address": "0050.5681.a376",
         "type": "DYNAMIC",
         "ports": "Po1"
       },
       {
         "vlan_id": "53",
         "mac_address": "0050.5681.a93c",
-        "type": "DYNAMIC",
-        "ports": "Po1"
-      },
-      {
-        "vlan_id": "53",
-        "mac_address": "0050.5681.aa45",
         "type": "DYNAMIC",
         "ports": "Po1"
       },
@@ -1275,6 +1227,30 @@
       },
       {
         "vlan_id": "53",
+        "mac_address": "0050.5681.b3d5",
+        "type": "DYNAMIC",
+        "ports": "Po1"
+      },
+      {
+        "vlan_id": "53",
+        "mac_address": "0050.5681.b3fb",
+        "type": "DYNAMIC",
+        "ports": "Po1"
+      },
+      {
+        "vlan_id": "53",
+        "mac_address": "0050.5681.b67e",
+        "type": "DYNAMIC",
+        "ports": "Po1"
+      },
+      {
+        "vlan_id": "53",
+        "mac_address": "0050.5681.bf18",
+        "type": "DYNAMIC",
+        "ports": "Po1"
+      },
+      {
+        "vlan_id": "53",
         "mac_address": "0050.5681.c14a",
         "type": "DYNAMIC",
         "ports": "Po1"
@@ -1282,6 +1258,12 @@
       {
         "vlan_id": "53",
         "mac_address": "0050.5681.c9c6",
+        "type": "DYNAMIC",
+        "ports": "Po1"
+      },
+      {
+        "vlan_id": "53",
+        "mac_address": "0050.5681.d017",
         "type": "DYNAMIC",
         "ports": "Po1"
       },
@@ -1312,24 +1294,6 @@
       {
         "vlan_id": "53",
         "mac_address": "0050.5681.e61d",
-        "type": "DYNAMIC",
-        "ports": "Po1"
-      },
-      {
-        "vlan_id": "53",
-        "mac_address": "0050.5681.f0fb",
-        "type": "DYNAMIC",
-        "ports": "Po1"
-      },
-      {
-        "vlan_id": "53",
-        "mac_address": "0050.5681.fe9c",
-        "type": "DYNAMIC",
-        "ports": "Po1"
-      },
-      {
-        "vlan_id": "53",
-        "mac_address": "0050.5681.ff87",
         "type": "DYNAMIC",
         "ports": "Po1"
       },

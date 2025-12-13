@@ -470,7 +470,7 @@ def _parse_syslog_line(line: str):
 
 def capture_device_output(creds, progress_callback=None):
     hostname = creds["hostname"]
-    device_type = creds["device_type"]
+    device_type = creds["os"]
     conn = connect_to_device(creds)
 
     if conn:

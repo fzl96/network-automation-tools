@@ -22,22 +22,6 @@ KEY_FILE = os.path.join("inventory/lib", "key.key")
 console = Console()
 
 
-def map_os_to_device_type(os_type: str) -> str:
-    os_type = os_type.lower()
-
-    mapping = {
-        "ios": "cisco_ios",
-        "iosxe": "cisco_ios",
-        "nxos_ssh": "cisco_nxos",
-        "nxos": "cisco_nxos",
-        "eos": "arista_eos",
-        "junos": "juniper_junos",
-        "iosxr": "cisco_xr",
-    }
-
-    return mapping.get(os_type, "cisco_ios")  # safe default
-
-
 def connect_to_device(creds):
     key = load_key()
     fernet = Fernet(key)
@@ -45,7 +29,7 @@ def connect_to_device(creds):
     ip = creds["ip"]
 
     creds = {
-        "device_type": creds["device_type"],
+        "device_type": creds["os"],
         "ip": creds["ip"],
         "username": creds["username"],
         "password": fernet.decrypt(creds["password"].encode()).decode(),
@@ -451,7 +435,7 @@ def show_logg(conn: BaseConnection, device_type: str):
 
 def collect_data_mantools(creds):
     hostname = creds["hostname"]
-    device_type = creds["device_type"]
+    device_type = creds["os"]
 
     conn = connect_to_device(creds)
 
@@ -552,13 +536,11 @@ def load_devices(file="inventory.csv"):
                 if "apic" in os_type:
                     continue
 
-                device_type = map_os_to_device_type(os_type)
                 devices.append(
                     {
                         "hostname": hostname,
                         "ip": ip,
                         "os": os_type,
-                        "device_type": device_type,
                         "username": username,
                         "password": enc_password,
                     }

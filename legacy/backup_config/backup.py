@@ -217,12 +217,11 @@ def backup_configs(device: Dict[str, str], device_dir: str) -> None:
                 )
                 
                 # Create a simple filename
-                filename = f"{customer}_{hostname}_command_{timestamp}.txt"
+                filename = f"{customer}_{hostname}_{timestamp}.txt"
                 filepath = os.path.join(device_dir, filename)
                 
                 # Write to file
                 with open(filepath, "w") as f:
-                    f.write(f"# {hostname} | {customer} | {timestamp}\n\n")
                     f.write(data)
                 
                 logging.info(f"Backed up {cmd} for {hostname} to {filename}")
@@ -251,15 +250,10 @@ def backup_commands(device: Dict[str, str], commands: List[str], device_dir: str
         timestamp = datetime.now().strftime("%Y%m%d-%H%M")
         
         output_filename = os.path.join(
-            device_dir, f"{customer}_{hostname}_commands_{timestamp}.txt"
+            device_dir, f"{customer}_{hostname}_{timestamp}.txt"
         )
 
         with open(output_filename, "w") as f:
-            f.write(f"### Command Backup for {hostname} ({ip}) ###\n")
-            f.write(f"Timestamp: {timestamp}\n")
-            f.write(f"OS Type: {os_type}\n")
-            f.write("=" * 60 + "\n\n")
-
             for cmd in commands:
                 try:
                     console.print(f"[cyan]📝 Running: {cmd} on {hostname}[/cyan]")
