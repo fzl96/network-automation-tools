@@ -16,8 +16,8 @@ class OSDetector:
     
     # Device type priority based on your network (most common first)
     DEVICE_PRIORITY = [
+        'cisco_nxos',       # Cisco NX-OS - for your NX-OS devices    
         'cisco_ios',        # Cisco IOS - most common
-        'cisco_nxos',       # Cisco NX-OS - for your NX-OS devices
         'cisco_xe',         # Cisco IOS-XE
         'cisco_xr',         # Cisco IOS-XR
         'arista_eos',       # Arista EOS
@@ -199,40 +199,65 @@ class OSDetector:
     
     def _match_device_pattern(self, device_type: str, output: str) -> bool:
         """Quick pattern matching for device identification."""
+        output_lower = (output or "").lower()
+
+        # # PATCH: agar NX-OS tidak salah match sebagai IOS
+        # # Jika output mengandung ciri NX-OS/Nexus, maka not match IOS.
+        if device_type == "cisco_ios":
+            if ("nx-os" in output_lower) or ("nexus" in output_lower) or ("nxos:" in output_lower):
+                return False
+
         if device_type in self.QUICK_PATTERNS:
             patterns = self.QUICK_PATTERNS[device_type]
-            output_lower = output.lower()
-            return any(pattern.lower() in output_lower for pattern in patterns)
+            return any(pat.lower() in output_lower for pat in patterns)
+
         return False
+
+
     
     def _get_quick_hostname_from_conn(self, conn: BaseConnection, device_type: str) -> str:
         """Get hostname quickly."""
+        # # PATCH: Ambil hostname dari tanda #
+        # # misalnya : "SW-CORE-01#" atau "SW-CORE-01>"
+        try:
+            prompt = conn.find_prompt()
+            if prompt:
+                cleaned = prompt.replace("#", "").replace(">", "").strip()
+                if cleaned:
+                    return cleaned
+        except:
+            pass  
+
         try:
             # Device-specific quick hostname commands
             quick_hostname_cmds = {
-                'cisco_ios': 'show run | i hostname',
+                'cisco_ios': 'show run | i ^hostname',
                 'cisco_nxos': 'show hostname',
-                'cisco_xe': 'show run | i hostname',
+                'cisco_xe': 'show run | i ^hostname',
                 'arista_eos': 'show hostname',
             }
-            
+
             cmd = quick_hostname_cmds.get(device_type, 'show hostname')
             output = conn.send_command_timing(cmd, delay_factor=0.5, max_loops=3)
-            
+
             # Quick parsing
-            lines = output.strip().splitlines() # type: ignore
+            lines = (output or "").strip().splitlines()
             for line in lines:
-                if 'hostname' in line.lower():
-                    parts = line.split()
-                    if len(parts) > 1:
-                        return parts[1].strip()
-                elif line.strip() and not line.startswith('#'):
-                    return line.strip()
-            
+                line_stripped = line.strip()
+
+                # # PATCH: parsing "hostname <NAME>" 
+                if line_stripped.lower().startswith("hostname"):
+                    return line_stripped.replace("hostname", "", 1).strip()
+
+                # # fallback jika output hanya nama hostname aja (mis. "show hostname")
+                if line_stripped and not line_stripped.startswith('#'):
+                    return line_stripped
+
             return "Unknown"
-            
+
         except:
             return "Unknown"
+
     
     def _get_quick_hostname(self, ip: str, username: str, password: str) -> Optional[str]:
         """Get hostname via quick SSH connection."""

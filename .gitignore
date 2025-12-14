@@ -15,3 +15,4 @@ main.spec
 /dist/
 /build/
 *.spec
+customer_config.json
