@@ -166,7 +166,7 @@ def main():
             slow_print("Exit System...", style="green")
             time.sleep(0.3)
             print("✅ System exit complete. Goodbye! 👋")
-            break
+            sys.exit(0)
 
         else:
             print("\n❌ Invalid selection. Please try again.")

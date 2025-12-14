@@ -149,6 +149,9 @@ def auto_fix_inventory(username=None, password=None):
             updated_rows.append([hostname or "Unknown", ip, os_type or "", row_user, row_pass])
             continue
 
+        assert current_user is not None
+        assert current_pass is not None
+
         # Check if we need to detect OS/hostname
         needs_detection = not hostname or not os_type or hostname == "Unknown" or os_type in ["", "UNKNOWN"]
         
@@ -197,6 +200,7 @@ def auto_fix_inventory(username=None, password=None):
 
 def add_to_inventory(ip, hostname, os_type, username, password):
     """Add or update a device in the inventory."""
+    status = "unknown"
     enc_password = encrypt_value(password) if password else ""
     
     # Read existing inventory
@@ -278,5 +282,5 @@ if __name__ == "__main__":
     if username and password:
         save = console.input("\nSave these credentials for future use? (y/N): ").lower()
         if save == 'y':
-            save_credentials(username, password)
+            save_credentials("default", username, password)
             console.print("[green]Credentials saved.[/green]")
