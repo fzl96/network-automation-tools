@@ -62,13 +62,14 @@ def connect_to_device(creds):
     try:
         device = ConnectHandler(**creds)
         device.enable()
+        console.print(f"[green]✓ Connected to {hostname} ({creds['device_type']})...[/green]")
         return device
 
     except NetMikoTimeoutException:
         with open("connect_error.csv", "a") as file:
             file.write(f"{hostname};{ip};Device Unreachable/SSH not enabled")
         return None
-
+    
     except NetMikoAuthenticationException:
         with open("connect_error.csv", "a") as file:
             file.write(f"{hostname};{ip};Authentication failure")
@@ -466,7 +467,7 @@ def collect_data_mantools(creds):
 
     if conn:
         console.print(
-            f"[bold cyan]Connected to {hostname} ({device_type})...[/bold cyan]"
+            f"[green]✓ Connected to {hostname} ({device_type})...[/green]"
         )
 
         try:
@@ -540,10 +541,12 @@ def collect_devices_data(base_dir=None):
     for dev in devices:
         hostname = dev.get("hostname", "")
         data = collect_data_mantools(dev)
+        console.print(f"[green]✓ Data collected from {hostname}.[/green]")
         with open(
             os.path.join(path, f"{customer_name}___{hostname}___{timestamp}.txt"), "w"
         ) as f:
             f.write(data)
+        console.print(f"[bold cyan]✓ Data saved for {hostname} to {path}.[/bold cyan]")    
 
 from inventory.lib.path import inventory_path
 def load_devices(file=None):
