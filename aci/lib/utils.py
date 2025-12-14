@@ -5,6 +5,8 @@ from typing import Optional
 from requests.cookies import RequestsCookieJar
 from cryptography.fernet import Fernet
 from inventory.lib.credential_manager import load_key
+from rich.console import Console
+console = Console()
 
 from inventory.lib.path import inventory_path
 def load_devices(file=None):
@@ -67,7 +69,7 @@ def apic_login(
                 print("✗ Authentication failed: Invalid credentials.")
                 return None
 
-        print(f"✓ Successfully authenticated to APIC {apic_ip}")
+        console.print(f"[green]✓ Successfully authenticated to APIC {apic_ip}[/green]")
         return resp.cookies
 
     except requests.exceptions.ConnectionError:

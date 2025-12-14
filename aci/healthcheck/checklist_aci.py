@@ -1556,7 +1556,7 @@ class ACIHealthChecker:
                     path, f"{customer_name}_ACI_Health_Report_{timestamp}.xlsx"
                 )
                 wb.save(out_path)
-                self.console.print(f"[green]✓ Healthcheck saved to {out_path}[/green]")
+                self.console.print(f"[cyan]✓ Healthcheck saved to {out_path}[/cyan]")
             else:
                 self.console.print("[red]x Healthcheck failed[/red]")
 

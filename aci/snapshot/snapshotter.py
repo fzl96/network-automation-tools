@@ -4,6 +4,7 @@ import re
 import json
 import os
 import datetime
+import logging
 from aci.api.aci_client import (
     get_drop_errors,
     get_epgs,
@@ -23,13 +24,18 @@ from rich.console import Console
 from legacy.customer_context import get_customer_name
 
 console = Console()
-
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 
 PATH_RE = re.compile(
     r"topology/pod-(?P<pod>\d+)/paths-(?P<node>\d+)/pathep-\[(?P<if>[^\]]+)\]"
 )
 
+# -------------------
+# Utility Functions
+# -------------------
 
 def parse_path_from_attr(fabric_path_dn: str):
     if not fabric_path_dn:
@@ -40,11 +46,35 @@ def parse_path_from_attr(fabric_path_dn: str):
 
     return m.group("node"), m.group("if")
 
+def validate_snapshot(data: dict):
+    """Validate if snapshot JSON has expected keys."""
+    required_keys = [
+        "fabric_health",
+        "faults",
+        "interfaces",
+        "interface_errors",
+        "drop_errors",
+        "output_errors",
+        "crc_errors",
+        "endpoints",
+        "urib_routes",
+        "path_ep",
+        "pc_aggr",
+    ]
+    missing = [k for k in required_keys if k not in data]
+    if missing:
+        logging.warning(f"Snapshot missing keys: {missing}")
+        return False
+    return True
 
 def process_endpoints(cookies, apic_ip):
     endpoints = []
-    endpoints_with_ip = get_endpoints_with_ip(cookies, apic_ip)
-    epgs = get_epgs(cookies, apic_ip)
+    try:
+        endpoints_with_ip = get_endpoints_with_ip(cookies, apic_ip)
+        epgs = get_epgs(cookies, apic_ip)
+    except Exception as e:
+        logging.error(f"Failed to retrieve endpoints or EPGs from {apic_ip}: {e}")
+        return endpoints
 
     epg_map = {}
     for epg in epgs:
@@ -89,27 +119,34 @@ def process_endpoints(cookies, apic_ip):
             }
             endpoints.append(data)
 
+    logging.info(f"Processed {len(endpoints)} endpoints endpoints from {apic_ip}.")
     return endpoints
 
 
 def take_snapshot(cookies, apic_ip):
     # Collect all data
-    data = {
-        "fabric_health": get_fabric_health(cookies, apic_ip),
-        "faults": get_faults(cookies, apic_ip),
-        "interfaces": get_interface_status(cookies, apic_ip),
-        "interface_errors": get_interface_errors(cookies, apic_ip),
-        "drop_errors": get_drop_errors(cookies, apic_ip),
-        "output_errors": get_output_errors(cookies, apic_ip),
-        "crc_errors": get_crc_errors(cookies, apic_ip),
-        "endpoints": process_endpoints(cookies, apic_ip),
-        "urib_routes": get_urib_routes(cookies, apic_ip),
-        "path_ep": get_output_path_ep(cookies, apic_ip),
-        "pc_aggr": get_pc_aggr(cookies, apic_ip),
-    }
-
-    return data
-
+    try:
+        data = {
+            "fabric_health": get_fabric_health(cookies, apic_ip),
+            "faults": get_faults(cookies, apic_ip),
+            "interfaces": get_interface_status(cookies, apic_ip),
+            "interface_errors": get_interface_errors(cookies, apic_ip),
+            "drop_errors": get_drop_errors(cookies, apic_ip),
+            "output_errors": get_output_errors(cookies, apic_ip),
+            "crc_errors": get_crc_errors(cookies, apic_ip),
+            "endpoints": process_endpoints(cookies, apic_ip),
+            "urib_routes": get_urib_routes(cookies, apic_ip),
+            "path_ep": get_output_path_ep(cookies, apic_ip),
+            "pc_aggr": get_pc_aggr(cookies, apic_ip),
+        }
+        if validate_snapshot(data):
+            console.print(f"[cyan]Snapshot from {apic_ip} is valid.[/cyan]")
+        else:
+            console.print(f"[red]Snapshot from {apic_ip} is missing some data.[/red]")
+        return data
+    except Exception as e:
+        console.print(f"[red]❌ Error taking snapshot from {apic_ip}: {e}[/red]")
+        return {}
 
 def list_snapshots(base_dir=None):
     customer = get_customer_name()
@@ -119,12 +156,14 @@ def list_snapshots(base_dir=None):
         folder = os.path.join("results", customer, "aci", "snapshot")
 
     if not os.path.exists(folder):
-        print("📂 No snapshots taken yet.")
+        logging.info(f"No snapshot folder found at {folder}.")
         return []
+    
     files = [f for f in os.listdir(folder) if f.endswith(".json")]
     if not files:
-        print("📂 No snapshot files found.")
+        logging.info(f"No snapshot files found in {folder}.")
         return []
+    
     files.sort()
     print("\n🕓 Available Snapshots:")
     for i, f in enumerate(files):
@@ -198,4 +237,4 @@ def take_all_snapshots(base_dir=None):
     filepath = os.path.join(snapshot_dir, filename)
     with open(filepath, "w") as f:
         json.dump(combined, f, indent=2)
-    print(f"✅ Snapshot saved to {filepath}")
+    console.print(f"[cyan]All snapshots taken and saved to {filepath}.[/cyan]")
