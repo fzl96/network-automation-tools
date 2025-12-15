@@ -2,6 +2,7 @@
 from inventory.lib.session_dir import get_session_dir
 from pathlib import Path
 import sys
+import os
 from pathlib import Path
 
 def inventory_path() -> Path:
@@ -21,7 +22,12 @@ def get_app_dir():
     return Path(__file__).resolve().parent
 
 def get_data_dir(app_name="mantools"):
-    """Writable user data directory"""
-    base = Path.home() / f".{app_name}"
-    base.mkdir(parents=True, exist_ok=True)
-    return base
+    """Writable per-user data directory (cross-platform)"""
+    if os.name == "nt":
+        base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+        data_dir = base / app_name
+    else:
+        data_dir = Path.home() / f".{app_name}"
+
+    data_dir.mkdir(parents=True, exist_ok=True)
+    return data_dir
