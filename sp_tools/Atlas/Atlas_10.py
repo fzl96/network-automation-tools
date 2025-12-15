@@ -6,6 +6,8 @@ import sys
 import os
 import getpass
 
+SCRIPT_DIR      = os.path.abspath( os.path.dirname( __file__ ) )
+                                                   
 # memastikan root project (/root) ada di sys.path untuk import sp_tools
 #sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 from sp_tools.jumphost import get_jumpserver
@@ -130,7 +132,7 @@ def _run_atlas_core(jumpserver, destination, destination_ip):
     print("Connection successfully disconnected.\n")
 
     # 9-10. translate IP -> hostname
-    find_ips_and_format_output("ip_interface_bank.xlsx", traceroute_output)
+    find_ips_and_format_output(f"{SCRIPT_DIR}/ip_interface_bank.xlsx", traceroute_output)
 
     return traceroute_output
 
