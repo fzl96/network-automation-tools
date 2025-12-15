@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import csv
 from inventory.lib.path import inventory_path
+
 INVENTORY_FILE = inventory_path()
 def show_inventory():
     print("\nCurrent Device Inventory")

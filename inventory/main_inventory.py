@@ -97,8 +97,6 @@ def show_menu():
     )
 
 def main():
-    base_dir = None
-
     while True:
         print_header()
         show_menu()

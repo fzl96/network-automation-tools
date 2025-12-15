@@ -1,0 +1,267 @@
+Backup created: 20251215-1248
+Device: MSI-SF-ACS-01 (10.8.254.233)
+Device Type: cisco_ios
+Output Length: 6471 characters
+============================================================
+
+Building configuration...
+Current configuration : 6412 bytes
+!
+! Last configuration change at 13:38:29 JKT Tue Nov 25 2025 by lanmanage
+! NVRAM config last updated at 12:10:47 JKT Mon Dec 8 2025 by lanmanage
+!
+version 12.2
+no service pad
+service timestamps debug datetime msec
+service timestamps log datetime msec
+no service password-encryption
+!
+hostname MSI-SF-ACS-01
+!
+boot-start-marker
+boot-end-marker
+!
+enable secret 5 $1$W4he$8oyoDUYCnZc9IGo34q/gy1
+!
+username lanmanage privilege 15 secret 5 $1$NYJh$FGaQy.bfM1n3LjnJIBI7n/
+username splunkadmin password 0 P@ssw0rd
+!
+!
+no aaa new-model
+clock timezone JKT 7
+system mtu routing 1500
+authentication mac-move permit
+ip subnet-zero
+!
+!
+no ip domain-lookup
+ip domain-name mastersystem.co.id
+!
+!
+crypto pki trustpoint TP-self-signed-4259495296
+ enrollment selfsigned
+ subject-name cn=IOS-Self-Signed-Certificate-4259495296
+ revocation-check none
+ rsakeypair TP-self-signed-4259495296
+!
+!
+crypto pki certificate chain TP-self-signed-4259495296
+ certificate self-signed 01
+  30820255 308201BE A0030201 02020101 300D0609 2A864886 F70D0101 04050030 
+  31312F30 2D060355 04031326 494F532D 53656C66 2D536967 6E65642D 43657274 
+  69666963 6174652D 34323539 34393532 3936301E 170D3933 30333031 30303031 
+  32355A17 0D323030 31303130 30303030 305A3031 312F302D 06035504 03132649 
+  4F532D53 656C662D 5369676E 65642D43 65727469 66696361 74652D34 32353934 
+  39353239 3630819F 300D0609 2A864886 F70D0101 01050003 818D0030 81890281 
+  8100A627 62481110 6457E618 274BAFC2 67990D7B DC8A8C06 D53F211B 503711FA 
+  8E67BB17 13211AC1 4FF6570B 0B961A0F 5FF51788 0ADEC07C 4BF815CF 615229CF 
+  1CDAADD9 6E62BED5 5D20EDE5 29D3BAE3 43493EC1 C80BE32D 2ABAC5B9 DF9CA6C5 
+  75639FEA 0D5E007B 170E27E7 723C4370 46946B48 F1FCCC51 2B9BDCDB B3F7C04A 
+  530B0203 010001A3 7D307B30 0F060355 1D130101 FF040530 030101FF 30280603 
+  551D1104 21301F82 1D4D5349 2D53544F 5230312E 6D617374 65727379 7374656D 
+  2E636F2E 6964301F 0603551D 23041830 16801453 2005BEF2 617BF2EA E18A3A6F 
+  FABA30EE 14D82930 1D060355 1D0E0416 04145320 05BEF261 7BF2EAE1 8A3A6FFA 
+  BA30EE14 D829300D 06092A86 4886F70D 01010405 00038181 0003DBBA 4D705D0E 
+  486444BF 7626FC9D 2D9B00C8 5E509E47 8C944B53 61737D7E 141684E5 964BCF37 
+  E4A7067E FAFCF2C1 2A9A7079 234ECDBE CCA69716 0E5CECA4 2C26ECCA CD2B6075 
+  5A5BDD02 CCED0C79 E806E578 8142A530 C18BC839 C56E8C87 09189C2F 3F9DC0D7 
+  E7A89593 4BBDB225 446670A7 0ABA482A B3BF3A7A 34A5F3B6 ED
+  quit
+spanning-tree mode pvst
+spanning-tree etherchannel guard misconfig
+spanning-tree extend system-id
+!
+!
+!
+!
+vlan internal allocation policy ascending
+!
+ip ssh source-interface Vlan7
+ip ssh version 2
+!
+!
+interface Port-channel1
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ spanning-tree bpdufilter enable
+!
+interface Port-channel2
+ description CITRIX
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+!
+interface FastEthernet0
+ ip address 10.8.254.233 255.255.255.0
+!
+interface GigabitEthernet0/1
+ description MANAGEMENT-HPE Synergy-1
+ switchport access vlan 65
+ switchport mode access
+ spanning-tree portfast
+!
+interface GigabitEthernet0/2
+ description MANAGEMENT-3Par-1
+ switchport access vlan 65
+ switchport mode access
+ spanning-tree portfast
+!
+interface GigabitEthernet0/3
+ description MANAGEMENT-AFF-A200-1
+ switchport access vlan 65
+ switchport mode access
+ spanning-tree portfast
+!
+interface GigabitEthernet0/4
+ description MANAGEMENT-citrix ns01
+ switchport access vlan 58
+ switchport mode access
+ spanning-tree portfast
+!
+interface GigabitEthernet0/5
+ description Mesin Absen
+ switchport access vlan 500
+ switchport mode access
+ spanning-tree portfast
+!
+interface GigabitEthernet0/6
+ description MSI-DCHP01
+ switchport access vlan 50
+ switchport mode access
+ spanning-tree portfast
+!
+interface GigabitEthernet0/7
+ description "SVR_HRD"
+ switchport access vlan 72
+ switchport mode access
+ spanning-tree portfast
+!
+interface GigabitEthernet0/8
+ description DL380G10 VM Management
+ switchport access vlan 65
+ switchport mode access
+ spanning-tree portfast
+!
+interface GigabitEthernet0/9
+ description DELL-R6525-01A
+ switchport access vlan 66
+ switchport mode access
+ spanning-tree portfast
+!
+interface GigabitEthernet0/10
+ description DELL-R6525-02A
+ switchport access vlan 66
+ switchport mode access
+ spanning-tree portfast
+!
+interface GigabitEthernet0/11
+ description DELL-R6525-03A
+ switchport access vlan 66
+ switchport mode access
+ spanning-tree portfast
+!
+interface GigabitEthernet0/12
+ description DELL-R6525-04A
+ switchport access vlan 66
+ switchport mode access
+ spanning-tree portfast
+!
+interface GigabitEthernet0/13
+ description IDRAG_DELL-R6525-01
+ switchport access vlan 65
+ switchport mode access
+ spanning-tree portfast
+!
+interface GigabitEthernet0/14
+ description IDRAG_DELL-R6525-03
+ switchport access vlan 65
+ switchport mode access
+ spanning-tree portfast
+!
+interface GigabitEthernet0/15
+ description CITRIX
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ channel-group 2 mode active
+!
+interface GigabitEthernet0/16
+ description CITRIX
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ channel-group 2 mode active
+!
+interface GigabitEthernet0/17
+!
+interface GigabitEthernet0/18
+!
+interface GigabitEthernet0/19
+!
+interface GigabitEthernet0/20
+!
+interface GigabitEthernet0/21
+ shutdown
+!
+interface GigabitEthernet0/22
+ shutdown
+!
+interface GigabitEthernet0/23
+!
+interface GigabitEthernet0/24
+!
+interface GigabitEthernet1/1
+!
+interface GigabitEthernet1/2
+!
+interface GigabitEthernet1/3
+!
+interface GigabitEthernet1/4
+!
+interface TenGigabitEthernet1/1
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ spanning-tree bpdufilter enable
+ channel-group 1 mode active
+!
+interface TenGigabitEthernet1/2
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ spanning-tree bpdufilter enable
+ channel-group 1 mode active
+!
+interface Vlan1
+ no ip address
+ shutdown
+!
+interface Vlan7
+ no ip address
+!
+interface Vlan58
+ ip address 10.20.51.25 255.255.255.240
+!
+ip default-gateway 10.8.254.254
+no ip http server
+no ip http secure-server
+ip sla enable reaction-alerts
+!
+!
+line con 0
+ exec-timeout 0 0
+line vty 0 4
+ session-timeout 5 
+ exec-timeout 5 0
+ privilege level 15
+ logging synchronous
+ login local
+ transport input ssh
+line vty 5 15
+ session-timeout 5 
+ exec-timeout 5 0
+ logging synchronous
+ login local
+ transport input ssh
+!
+ntp clock-period 36027108
+ntp server 10.10.52.52
+ntp server 10.20.66.22
+ntp server 10.20.66.21
+ntp server 10.10.80.11
+end

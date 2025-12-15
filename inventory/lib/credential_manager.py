@@ -2,16 +2,9 @@ import os
 import json
 from cryptography.fernet import Fernet
 from pathlib import Path
-
-# ---------------------------
-# Use a user-writable folder
-# ---------------------------
-HOME = Path.home()
-APP_DIR = HOME / ".mantools"  # hidden folder in user home
-APP_DIR.mkdir(parents=True, exist_ok=True)
-
-KEY_FILE = APP_DIR / "key.key"
-CRED_FILE = APP_DIR / "credentials.json"
+import tempfile
+from inventory.lib.session_dir import get_session_dir
+from inventory.lib.crypto_paths import KEY_FILE,CRED_FILE
 
 # ---------------------------
 # Key management
