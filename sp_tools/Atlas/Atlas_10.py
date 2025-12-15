@@ -4,6 +4,7 @@ from netmiko import ConnectHandler, redispatch
 import re
 import sys
 import os
+import getpass
 
 # memastikan root project (/root) ada di sys.path untuk import sp_tools
 #sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
@@ -97,15 +98,10 @@ def _run_atlas_core(jumpserver, destination, destination_ip):
     output = net_connect.read_channel()
     print(output)
 
-    # 3. kalau diminta username/password, kirim kredensial TACACS dan redispatch ke cisco_ios
+    # 3. kalau diminta username/password, kirim kredensial langsung dari user input
     if "username" in output.lower():
-        if not os.path.exists("tacacs_credentials.txt"):
-            raise FileNotFoundError("tacacs_credentials.txt tidak ditemukan!")
-
-        with open("tacacs_credentials.txt", "r") as cred_file:
-            lines = cred_file.readlines()
-            router_username = lines[0].strip()
-            router_password = lines[1].strip()
+        router_username = input("Enter router username: ").strip()
+        router_password = getpass.getpass("Enter router password: ")
 
         net_connect.write_channel(f"{router_username}\n")
         time.sleep(2)

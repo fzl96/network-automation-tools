@@ -3,6 +3,7 @@ from netmiko import redispatch
 import time
 import re
 import os
+import getpass
 from datetime import datetime
 import pandas as pd
 from openpyxl import load_workbook
@@ -59,21 +60,19 @@ def interactive_main():
     #---------------------------------------------------------------------------------------------------------------------
     
     #---------------------------------------------------------------------------------------------------------------------
-    # If prompted for a password, the script sends the password and redispatches the connection to the appropriate device type.
-    if "username" in output:
-        # Read username and password from a .txt file
-        with open('tacacs_credentials.txt', 'r') as cred_file:
-            lines = cred_file.readlines()
-            router_username = lines[0].strip()
-            router_password = lines[1].strip()
-        
-        # Send username and password to the router
+    # 3. kalau diminta username/password, kirim kredensial langsung dari user input
+    if "username" in output.lower():
+        router_username = input("Enter router username: ").strip()
+        router_password = getpass.getpass("Enter router password: ")
+
         net_connect.write_channel(f"{router_username}\n")
         time.sleep(2)
         net_connect.write_channel(f"{router_password}\n")
+
         print(f"\n{'~'*50}\n3. Destination Device Prompt\n{'~'*50}\n")
         print(net_connect.find_prompt())
         print("Router Prompt: {}".format(net_connect.find_prompt()))
+
         redispatch(net_connect, device_type="cisco_ios")
     
     # Print timestamp with day

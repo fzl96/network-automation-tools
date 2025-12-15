@@ -129,16 +129,24 @@ def main():
         choice = input("\nSelect an option (1-4 or q): ").strip().lower()
 
         if choice == "1":
+            slow_print("Launching Atlas Tools...", style="green")
             run_atlas()
+            pause()
 
         elif choice == "2":
+            slow_print("Launching CRCell Tools...", style="green")
             run_crcell()
+            pause()
 
         elif choice == "3":
+            slow_print("Launching Snipe Tools...", style="green")            
             run_snipe()
+            pause()
 
         elif choice == "4":
+            slow_print("Launching Xray Tools...", style="green")            
             run_xray()
+            pause()
 
         elif choice == "q":
             slow_print("Exit SP Tools...", style="green")  
