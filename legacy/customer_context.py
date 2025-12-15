@@ -5,9 +5,11 @@
 import json
 import os
 import re
+from inventory.lib.path import customer_path
 
-CONFIG_FILE = "customer_config.json"     # EDITABLE AREA: bebas dipindah dir lain
+CONFIG_FILE = customer_path()    # EDITABLE AREA: bebas dipindah dir lain
 
+    
 def get_customer_name(default="DEFAULT"):
     """
     Mengambil customer name dari file config.
