@@ -27,7 +27,7 @@ def get_data_dir(app_name="mantools"):
         base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
         data_dir = base / app_name
     else:
-        data_dir = Path.home() / f".{app_name}"
+        data_dir = Path.home() / f"{app_name}"
 
     data_dir.mkdir(parents=True, exist_ok=True)
     return data_dir
