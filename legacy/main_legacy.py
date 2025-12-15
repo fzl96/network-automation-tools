@@ -16,20 +16,12 @@ from legacy.backup_config.backup import run_backup
 from legacy.lib.utils import collect_devices_data
 from legacy.lib.snapshot import take_snapshot
 from legacy.lib.compare import compare
+from inventory.lib.path import get_data_dir
 
 console = Console()
 # ============================================================
 # Utility Functions
 # ============================================================
-def get_app_directory():
-    """Get the directory where the app is located"""
-    if getattr(sys, 'frozen', False):
-        # Running as PyInstaller executable
-        return os.path.dirname(sys.executable)
-    else:
-        # Running as script
-        return os.path.dirname(os.path.abspath(__file__))
-
 def clear_screen():
     """Clear terminal screen for clean display"""
     os.system("cls" if os.name == "nt" else "clear")
@@ -107,7 +99,7 @@ def show_menu():
 # Main Logic
 # ============================================================
 def main():
-    base_dir = get_app_directory()
+    base_dir = get_data_dir()
     while True:
         print_header()
         show_menu()

@@ -16,6 +16,8 @@ from aci.compare.comparer import (
 )
 from aci.healthcheck.checklist_aci import main_healthcheck_aci
 from legacy.customer_context import get_customer_name
+from inventory.lib.path import get_data_dir
+
 
 console = Console()
 customer_name = get_customer_name()
@@ -108,7 +110,7 @@ def show_menu():
     )
 
 def main():
-    base_dir = get_app_directory()
+    base_dir = get_data_dir()
 
     while True:
         print_header()
