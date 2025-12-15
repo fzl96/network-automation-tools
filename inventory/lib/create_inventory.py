@@ -7,7 +7,7 @@ from inventory.lib.credential_manager import save_credentials, load_credentials,
 from inventory.lib.detect_os_type import detect_os_type
 
 from rich.console import Console
-from pathlib import Path
+from inventory.lib.path import get_data_dir
 import sys
 
 console = Console()
@@ -39,6 +39,7 @@ def decrypt_value(value):
     except:
         # If decryption fails, return original value (might be plaintext)
         return value
+    
 def get_app_directory():
     """Get the directory where the app is located"""
     if getattr(sys, 'frozen', False):
@@ -51,7 +52,7 @@ def get_app_directory():
 
 def read_ips_from_csv(csv_file):
     ips = []
-    base_dir = base_dir = get_app_directory()  
+    base_dir = get_data_dir()
    
     # If path is not absolute, resolve relative to app directory
     if not os.path.isabs(csv_file):
