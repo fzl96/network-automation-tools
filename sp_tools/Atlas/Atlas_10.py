@@ -6,8 +6,12 @@ import sys
 import os
 
 # memastikan root project (/root) ada di sys.path untuk import sp_tools
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+#sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 from sp_tools.jumphost import get_jumpserver
+
+from inventory.lib.path import get_data_dir
+base_dir = get_data_dir()
+file_path = os.path.join(base_dir, "ip_interface_bank.xlsx")
 
 
 banner = f"""

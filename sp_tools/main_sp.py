@@ -9,6 +9,10 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.text import Text
+from sp_tools.Atlas.Atlas_10 import interactive_main as run_atlas
+from sp_tools.CRCell.CRC_Cell_15 import interactive_main as run_crcell
+from sp_tools.Snipe.snipe_R import interactive_main as run_snipe
+from sp_tools.Xray.xray_8 import interactive_main as run_xray
 console = Console()
 
 # ============================================================
@@ -125,16 +129,16 @@ def main():
         choice = input("\nSelect an option (1-4 or q): ").strip().lower()
 
         if choice == "1":
-            run_script("Atlas_v1/Atlas_10.py")
+            run_atlas()
 
         elif choice == "2":
-            run_script("CRCell_v1/CRC_Cell_15.py")
+            run_crcell()
 
         elif choice == "3":
-            run_script("Snipe_v1/snipe_R.py")
+            run_snipe()
 
         elif choice == "4":
-            run_script("Xray_v1/xray_8.py")
+            run_xray()
 
         elif choice == "q":
             slow_print("Exit SP Tools...", style="green")  
