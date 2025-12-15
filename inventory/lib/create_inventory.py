@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import csv
 import getpass
+import os
 from cryptography.fernet import Fernet
 from inventory.lib.credential_manager import save_credentials, load_credentials, load_key
 from inventory.lib.detect_os_type import detect_os_type
@@ -38,6 +39,92 @@ def decrypt_value(value):
     except:
         # If decryption fails, return original value (might be plaintext)
         return value
+def get_app_directory():
+    """Get the directory where the app is located"""
+    if getattr(sys, 'frozen', False):
+        # Running as PyInstaller executable
+        return os.path.dirname(sys.executable)
+    else:
+        # Running as script
+        return os.path.dirname(os.path.abspath(__file__))
+
+
+def read_ips_from_csv(csv_file):
+    ips = []
+    base_dir = base_dir = get_app_directory()  
+   
+    # If path is not absolute, resolve relative to app directory
+    if not os.path.isabs(csv_file):
+        csv_file = os.path.join(base_dir, csv_file)
+
+    if not os.path.isfile(csv_file):
+        console.print(f"[red]CSV file not found: {csv_file}[/red]")
+        return ips
+
+    try:
+        with open(csv_file, newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+
+            if not reader.fieldnames or 'ip' not in reader.fieldnames:
+                console.print("[red]CSV must contain an 'ip' column[/red]")
+                return ips
+
+            for row in reader:
+                ip = row.get('ip', '').strip()
+                if is_valid_ip(ip):
+                    ips.append(ip)
+                else:
+                    console.print(f"[yellow]Skipping invalid IP in CSV: {ip}[/yellow]")
+
+    except Exception as e:
+        console.print(f"[red]Failed to read CSV: {e}[/red]")
+
+    return ips
+
+import ipaddress
+
+def parse_ip_input(ip_input: str):
+    """
+    Parse IP input:
+    - single IP
+    - comma-separated IPs
+    - range (x.x.x.1-x.x.x.10)
+    - CIDR (x.x.x.0/24)
+    """
+    ips = set()
+
+    for part in ip_input.split(","):
+        part = part.strip()
+
+        # CIDR
+        if "/" in part:
+            try:
+                network = ipaddress.ip_network(part, strict=False)
+                for ip in network.hosts():
+                    ips.add(str(ip))
+            except ValueError:
+                console.print(f"[red]Invalid CIDR: {part}[/red]")
+
+        # Range
+        elif "-" in part:
+            try:
+                start, end = part.split("-")
+                start_ip = ipaddress.ip_address(start.strip())
+                end_ip = ipaddress.ip_address(end.strip())
+
+                for ip_int in range(int(start_ip), int(end_ip) + 1):
+                    ips.add(str(ipaddress.ip_address(ip_int)))
+            except ValueError:
+                console.print(f"[red]Invalid IP range: {part}[/red]")
+
+        # Single IP
+        else:
+            if is_valid_ip(part):
+                ips.add(part)
+            else:
+                console.print(f"[red]Invalid IP: {part}[/red]")
+
+    return sorted(ips)
 
 # ============================================================
 # Main Logic Functions
@@ -48,59 +135,67 @@ def create_inventory(username=None, password=None):
     console.print("[bold]\n📋 Create or Update Device Inventory[/bold]")
     console.rule(style="grey37")
 
-
-    # First, try to fix any existing incomplete entries
     auto_fix_inventory(username, password)
 
-    # Get credentials if not provided
     if not username or not password:
         username, password = get_credentials_from_user()
 
     while True:
-        ip = input("Enter device IP (or 'done'): ").strip()
-        if ip.lower() == "done":
+        ip_input = input(
+            "Enter IP(s), range, CIDR, CSV file, or 'done': "
+        ).strip()
+
+        if ip_input.lower() == "done":
             break
 
-        # Validate IP format (basic check)
-        if not is_valid_ip(ip):
-            console.print(f"[red]Invalid IP address format: {ip}[/red]")
-            continue
-
-        os_type, hostname = detect_os_type(ip, username, password)
-
-        # Handle authentication failures
-        while os_type == "AUTH_FAIL":
-            console.print("[red]Authentication failed. Please enter correct credentials:[/red]")
-            username = input("Username: ").strip()
-            password = getpass.getpass("Password: ")
-            os_type, hostname = detect_os_type(ip, username, password)
-            
-        # Handle unreachable devices
-        if os_type == "UNREACHABLE":
-            console.print(f"[yellow]Device {ip} is unreachable. Skipping...[/yellow]")
-            if console.input("Add anyway with manual details? (y/N): ").lower() == 'y':
-                hostname = input(f"Enter hostname for {ip}: ").strip() or "Unknown"
-                os_type = input(f"Enter OS type for {ip}: ").strip() or "UNKNOWN"
-                add_to_inventory(ip, hostname, os_type, username, password)
-            continue
-        
-        # Handle unknown SSH devices
-        if os_type == "UNKNOWN_SSH":
-            console.print(f"[yellow]Device {ip} responds to SSH but OS type is unknown[/yellow]")
-            hostname = input(f"Enter hostname for {ip}: ").strip() or f"device-{ip}"
-            os_type = "UNKNOWN_SSH"
-            add_to_inventory(ip, hostname, os_type, username, password)
-            continue
-
-        if os_type and hostname:
-            console.print(f"[green]✓ Detected: {hostname} ({os_type}) at {ip}[/green]")
-            add_to_inventory(ip, hostname, os_type, username, password)
+        # Expand input into list of IPs
+        if ip_input.lower().endswith(".csv"):
+            ip_list = read_ips_from_csv(ip_input)
         else:
-            console.print(f"[red]Failed to detect OS for {ip}[/red]")
-            if console.input("Add with manual details? (y/N): ").lower() == 'y':
-                hostname = input(f"Enter hostname for {ip}: ").strip() or "Unknown"
-                os_type = input(f"Enter OS type for {ip}: ").strip() or "UNKNOWN"
+            ip_list = parse_ip_input(ip_input)
+
+        if not ip_list:
+            continue
+
+        for ip in ip_list:
+            if not is_valid_ip(ip):
+                console.print(f"[red]Invalid IP address format: {ip}[/red]")
+                continue
+
+            os_type, hostname = detect_os_type(ip, username, password)
+
+            # Handle authentication failures
+            while os_type == "AUTH_FAIL":
+                console.print("[red]Authentication failed. Please enter correct credentials:[/red]")
+                username = input("Username: ").strip()
+                password = getpass.getpass("Password: ")
+                os_type, hostname = detect_os_type(ip, username, password)
+
+            # Handle unreachable devices
+            if os_type == "UNREACHABLE":
+                console.print(f"[yellow]Device {ip} is unreachable. Skipping...[/yellow]")
+                if console.input("Add anyway with manual details? (y/N): ").lower() == 'y':
+                    hostname = input(f"Enter hostname for {ip}: ").strip() or "Unknown"
+                    os_type = input(f"Enter OS type for {ip}: ").strip() or "UNKNOWN"
+                    add_to_inventory(ip, hostname, os_type, username, password)
+                continue
+
+            # Handle unknown SSH devices
+            if os_type == "UNKNOWN_SSH":
+                console.print(f"[yellow]Device {ip} responds to SSH but OS type is unknown[/yellow]")
+                hostname = input(f"Enter hostname for {ip}: ").strip() or f"device-{ip}"
                 add_to_inventory(ip, hostname, os_type, username, password)
+                continue
+
+            if os_type and hostname:
+                console.print(f"[green]✓ Detected: {hostname} ({os_type}) at {ip}[/green]")
+                add_to_inventory(ip, hostname, os_type, username, password)
+            else:
+                console.print(f"[red]Failed to detect OS for {ip}[/red]")
+                if console.input("Add with manual details? (y/N): ").lower() == 'y':
+                    hostname = input(f"Enter hostname for {ip}: ").strip() or "Unknown"
+                    os_type = input(f"Enter OS type for {ip}: ").strip() or "UNKNOWN"
+                    add_to_inventory(ip, hostname, os_type, username, password)
 
     console.print("[green]✓ Inventory saved.[/green]")
     return username, password
