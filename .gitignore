@@ -16,3 +16,4 @@ main.spec
 /build/
 *.spec
 customer_config.json
+*.csv
