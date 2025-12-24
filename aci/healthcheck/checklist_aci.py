@@ -1415,6 +1415,10 @@ class ACIHealthChecker:
         devices = load_devices()
         customer_name = get_customer_name()
 
+        if not devices:
+            self.console.print("[red]x No APIC devices found in inventory.[/red]")
+            self.console.print("[yellow]⚠ Please add APIC devices to the inventory to run the healthcheck.[/yellow]")
+
         wb = Workbook()
         assert wb.active is not None
         wb.remove(wb.active)

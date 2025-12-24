@@ -3,14 +3,18 @@ import json
 import re
 import datetime
 import glob
+from unittest import result
 from rich import print as rprint
 from openpyxl import Workbook
 from openpyxl.styles import Alignment
 from openpyxl.cell.cell import MergedCell
 from openpyxl.utils import get_column_letter
 from aci.snapshot.snapshotter import choose_snapshots
-from aci.lib.utils import load_devices
+from aci.lib.utils import load_devices, print_endpoints_table, print_interface_errors_table, print_general_table
 from legacy.customer_context import get_customer_name
+from rich.console import Console
+
+console = Console()
 
 def _autosize_columns(ws, padding=2, min_width=12, max_width=80):
     widths = {}
@@ -117,15 +121,13 @@ def write_interface_errors(intf_ws, category: str, changes: list):
 
 
 def compare_snapshots(file1, file2):
-    devices = load_devices()
-    apics = []
-    for device in devices:
-        apics.append(device.get("hostname", ""))
-
     with open(file1) as f1, open(file2) as f2:
         before_json = json.load(f1)
         after_json = json.load(f2)
 
+    # APICs that exist in BOTH snapshots
+    apics = sorted(set(before_json.keys()) & set(after_json.keys()))
+    print("DEBUG snapshot APICs:", apics)
     result = {}
 
     for apic in apics:
@@ -251,14 +253,14 @@ def compare_snapshots(file1, file2):
 
                 po_map[f"{node}-{attr.get('id', 'None')}"] = po_entry
 
-            before_errs = summarize_interface_errors(before.get("interface_errors", []))
-            after_errs = summarize_interface_errors(after.get("interface_errors", []))
-            error_changes = {}
-            for dn in set(before_errs) | set(after_errs):
-                b = before_errs.get(dn, 0)
-                a = after_errs.get(dn, 0)
-                if a > b:
-                    error_changes[dn] = f"{b} ➜ {a}"
+        before_errs = summarize_interface_errors(before.get("interface_errors", []))
+        after_errs = summarize_interface_errors(after.get("interface_errors", []))
+        error_changes = {}
+        for dn in set(before_errs) | set(after_errs):
+            b = before_errs.get(dn, 0)
+            a = after_errs.get(dn, 0)
+            if a > b:
+                error_changes[dn] = f"{b} ➜ {a}"
             result[apic]["interface_error_changes"] = error_changes
 
         # NOTE: CRC Errors
@@ -442,61 +444,20 @@ def compare_snapshots(file1, file2):
 
     return result
 
-
+from rich.table import Table
 def print_colored_result(result):
     rprint("\n📈 [bold]COMPARISON RESULT:[/bold]\n")
 
-    # Print summary counts
-    rprint("[bold underline]Summary:[/bold underline]")
-    for section, content in result.items():
-        if section == "fabric_health":
-            continue
-        if isinstance(content, dict):
-            count = len(content)
-        elif isinstance(content, list):
-            count = len(content)
-        else:
-            count = 1
-        rprint(f"• [cyan]{section}[/cyan]: [bold yellow]{count}[/bold yellow]")
-    rprint("")
+    if not result:
+        rprint("[dim](no differences found)[/dim]")
+        return
 
-    def print_section(title, content):
-        rprint(f"🔹 [cyan]{title}[/cyan]:")
-        if isinstance(content, dict):
-            if not content:
-                rprint("  (none)")
-            else:
-                for k, v in content.items():
-                    rprint(f"  • {k}: {v}")
-        elif isinstance(content, list):
-            if not content:
-                rprint("  (none)")
-            else:
-                for item in content:
-                    rprint(f"  • {item}")
-        else:
-            rprint(f"  {content}")
-        rprint("")  # spacing
+    for apic, apic_result in result.items():
+        rprint(f"\n🏷️ [bold magenta]APIC: {apic}[/bold magenta]\n")
 
-    for section in [
-        "fabric_health",
-        "new_faults",
-        "cleared_faults",
-        "new_endpoints",
-        "missing_endpoints",
-        "moved_endpoints",
-        "interface_changes",
-        "interface_error_changes",
-        "crc_error_changes",
-        "drop_error_changes",
-        "output_error_changes",
-        "urib_route_changes",
-    ]:
-        if section in result:
-            print_section(section, result[section])
-        else:
-            rprint(f"🔹 [yellow]{section}[/yellow]: (not available)\n")
-
+        print_general_table(apic, apic_result)
+        print_interface_errors_table(apic, apic_result)
+        print_endpoints_table(apic, apic_result)
 
 def save_to_excel(all_result: dict, filename=None, base_dir=None):
     devices = load_devices()
@@ -632,6 +593,7 @@ def save_to_excel(all_result: dict, filename=None, base_dir=None):
             _autosize_columns(eps_ws)
 
         wb.save(filepath)
+    console.print(f"[cyan] ✓ Saved comparison result to: {filepath}[/cyan]")
 
 def compare_select(base_dir):
     print("\n📂 Selecting snapshots to compare...")
@@ -639,9 +601,8 @@ def compare_select(base_dir):
     if file1 and file2:
         print(f"📊 Comparing '{file1}' and '{file2}'...")
         result = compare_snapshots(file1, file2)
-        # print_colored_result(result)
+        print_colored_result(result)
         save_to_excel(result, base_dir=base_dir)
-        print("✅ Comparison results saved to Excel.")
     else:
         print("❌ No valid snapshots selected.")        
 
@@ -662,5 +623,5 @@ def compare_last_two(base_dir):
         before, after = files[-2], files[-1]
         print(f"📊 Comparing:\n  BEFORE: {before}\n  AFTER:  {after}")
         result = compare_snapshots(before, after)
+        print_colored_result(result)
         save_to_excel(result, base_dir=base_dir)
-        print("✅ Comparison results saved to Excel.")
