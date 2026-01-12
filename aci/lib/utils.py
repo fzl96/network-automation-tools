@@ -430,6 +430,31 @@ def _autosize_columns(ws, padding=2, min_width=12, max_width=80):
     for col, w in widths.items():
         ws.column_dimensions[col].width = max(min(w + padding, max_width), min_width)
 
+def sanitize_sheet_title(title: str, max_len: int = 31) -> str:
+    """Return an Excel-safe sheet title (valid chars + max length)."""
+    # Excel sheet Guard excluding sensitive char.
+    invalid_chars = set(':/\\?*[]')
+    cleaned = "".join(ch for ch in title if ch not in invalid_chars)
+    return cleaned[:max_len].strip() or "Sheet"
+
+def unique_sheet_title(base: str, used: set, max_len: int = 31) -> str:
+    """Return a unique, safe sheet title within the workbook."""
+    title = sanitize_sheet_title(base, max_len=max_len)
+    if title not in used:
+        used.add(title)
+        return title
+
+    # Add a suffix while keeping within Excel's 31-char limit.
+    suffix = 1
+    while True:
+        suffix_str = f"~{suffix}"
+        trimmed = title[: max_len - len(suffix_str)]
+        candidate = f"{trimmed}{suffix_str}"
+        if candidate not in used:
+            used.add(candidate)
+            return candidate
+        suffix += 1
+
 def save_to_excel(all_result: dict, filename=None, base_dir=None):
     apics = list(all_result.keys())
     customer_name = get_customer_name()
@@ -451,9 +476,10 @@ def save_to_excel(all_result: dict, filename=None, base_dir=None):
     wb.remove(wb.active)  # type: ignore
 
     debug(f"save_to_excel: APICs to write = {apics}")
+    used_titles = set()
     for apic in apics:
         result = all_result.get(apic, {}) or {}
-        ws = wb.create_sheet(f"{apic} - general")
+        ws = wb.create_sheet(unique_sheet_title(f"{apic} - general", used_titles))
 
         ws.append(["Category", "Item", "Details"])
 
@@ -463,7 +489,7 @@ def save_to_excel(all_result: dict, filename=None, base_dir=None):
         _autosize_columns(ws)
 
         # NOTE: Faults Changes
-        ws = wb.create_sheet(f"{apic} - Faults Changes")
+        ws = wb.create_sheet(unique_sheet_title(f"{apic} - Faults Changes", used_titles))
 
         headers = [
             "Category",
@@ -509,7 +535,7 @@ def save_to_excel(all_result: dict, filename=None, base_dir=None):
         _autosize_columns(ws)
 
         # NOTE: Route Changes
-        ws = wb.create_sheet(f"{apic} - Route Changes")
+        ws = wb.create_sheet(unique_sheet_title(f"{apic} - Route Changes", used_titles))
 
         headers = [
             "Category",

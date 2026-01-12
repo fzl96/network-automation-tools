@@ -1071,6 +1071,33 @@ class ACIHealthChecker:
             self.console = console
 
         @staticmethod
+        def sanitize_sheet_title(title: str, max_len: int = 31) -> str:
+            """Return an Excel-safe sheet title (valid chars + max length)."""
+            # Excel sheet Guard excluding sensitive char.
+            invalid_chars = set(':/\\?*[]')
+            cleaned = "".join(ch for ch in title if ch not in invalid_chars)
+            return cleaned[:max_len].strip() or "Sheet"
+
+        @classmethod
+        def unique_sheet_title(cls, base: str, used: set, max_len: int = 31) -> str:
+            """Return a unique, safe sheet title within the workbook."""
+            title = cls.sanitize_sheet_title(base, max_len=max_len)
+            if title not in used:
+                used.add(title)
+                return title
+
+            # Add a suffix while keeping within Excel's 31-char limit.
+            suffix = 1
+            while True:
+                suffix_str = f"~{suffix}"
+                trimmed = title[: max_len - len(suffix_str)]
+                candidate = f"{trimmed}{suffix_str}"
+                if candidate not in used:
+                    used.add(candidate)
+                    return candidate
+                suffix += 1
+
+        @staticmethod
         def ensure_dir(base_dir=None):
             customer_name = get_customer_name()
             """Ensure directory exists, create if it doesn't
@@ -1127,8 +1154,11 @@ class ACIHealthChecker:
             Create 5 sheets in the given workbook for a site, with sorting + friendly formatting.
             Sheet names are prefixed with the site.
             """
+            used_titles = set()
             # --- APIC Controllers ---
-            ws = wb.create_sheet(f"{site} - APIC")
+            ws = wb.create_sheet(
+                self.unique_sheet_title(f"{site} - APIC", used_titles)
+            )
             ws.append(["Hostname", "Serial", "IP", "Mode", "Status", "Health"])
             if apic_nodes:
                 for node in sorted(apic_nodes, key=lambda x: x.get("name", "")):
@@ -1146,7 +1176,9 @@ class ACIHealthChecker:
                 ws.append(["No data available"])
 
             # --- Leaf/Spine Nodes ---
-            ws = wb.create_sheet(f"{site} - Nodes")
+            ws = wb.create_sheet(
+                self.unique_sheet_title(f"{site} - Nodes", used_titles)
+            )
             ws.append(
                 [
                     "Hostname",
@@ -1176,7 +1208,9 @@ class ACIHealthChecker:
                 )
 
             # --- Faults (latest first) ---
-            ws = wb.create_sheet(f"{site} - Faults")
+            ws = wb.create_sheet(
+                self.unique_sheet_title(f"{site} - Faults", used_titles)
+            )
             ws.append(["Severity", "Code", "Description", "Last Change", "DN"])
             for fault in sorted(
                 faults, key=lambda x: x.get("last_change", ""), reverse=True
@@ -1192,7 +1226,9 @@ class ACIHealthChecker:
                 )
 
             # --- FCS Errors ---
-            ws = wb.create_sheet(f"{site} - FCS Errors")
+            ws = wb.create_sheet(
+                self.unique_sheet_title(f"{site} - FCS Errors", used_titles)
+            )
             ws.append(["Node", "Interface", "FCS Errors", "DN"])
             for err in sorted(fcs_errors, key=lambda x: x.get("node", "")):
                 ws.append(
@@ -1205,7 +1241,9 @@ class ACIHealthChecker:
                 )
 
             # --- CRC Errors ---
-            ws = wb.create_sheet(f"{site} - CRC Errors")
+            ws = wb.create_sheet(
+                self.unique_sheet_title(f"{site} - CRC Errors", used_titles)
+            )
             ws.append(["Node", "Interface", "CRC Errors", "DN"])
             for err in sorted(crc_errors, key=lambda x: x.get("node", "")):
                 ws.append(
@@ -1218,7 +1256,9 @@ class ACIHealthChecker:
                 )
 
             # --- Drop Errors ---
-            ws = wb.create_sheet(f"{site} - Drop Errors")
+            ws = wb.create_sheet(
+                self.unique_sheet_title(f"{site} - Drop Errors", used_titles)
+            )
             ws.append(["Node", "Interface", "Drop Errors", "DN"])
             for err in sorted(drop_errors, key=lambda x: x.get("node", "")):
                 ws.append(
@@ -1231,7 +1271,9 @@ class ACIHealthChecker:
                 )
 
             # --- Drop Errors ---
-            ws = wb.create_sheet(f"{site} - Output Errors")
+            ws = wb.create_sheet(
+                self.unique_sheet_title(f"{site} - Output Errors", used_titles)
+            )
             ws.append(["Node", "Interface", "Output Errors", "DN"])
             for err in sorted(output_errors, key=lambda x: x.get("node", "")):
                 ws.append(
