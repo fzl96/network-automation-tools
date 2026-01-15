@@ -10,8 +10,6 @@ from openpyxl.utils import get_column_letter
 from openpyxl.cell.cell import MergedCell
 from legacy.customer_context import get_customer_name
 
-from legacy.lib.utils import load_devices
-
 console = Console()
 
 
@@ -36,8 +34,7 @@ def _autosize_columns(ws, padding=2, min_width=12, max_width=80):
 
 
 def compare_snapshots(devices, file1, file2):
-    hostnames = [dev["hostname"] for dev in devices]
-
+    # Prefer hostnames from snapshot JSON instead of inventory.
     with (
         open(file1, "rt", encoding="utf-8") as f1,
         open(file2, "rt", encoding="utf-8") as f2,
@@ -45,13 +42,38 @@ def compare_snapshots(devices, file1, file2):
         before_json = json.load(f1)
         after_json = json.load(f2)
 
+    hostnames = sorted(set(before_json.keys()) | set(after_json.keys()))
+
     result = {}
+    no_changes = True
+    no_change_hosts = []
 
     for host in hostnames:
-        before = before_json.get(host, {})
-        after = after_json.get(host, {})
+        before = before_json.get(host)
+        after = after_json.get(host)
 
-        if not before or not after:
+        if before is None or after is None:
+            # Mark missing snapshot data in the Excel output.
+            result[host] = {}
+            result[host]["item_changes"] = {}
+            result[host]["item_changes"]["snapshot_missing"] = []
+            result[host]["added_items"] = {}
+            result[host]["added_items"]["mac_address_table_added"] = []
+            result[host]["added_items"]["routing_table_added"] = []
+            result[host]["added_items"]["arp_table_added"] = []
+            result[host]["removed_items"] = {}
+            result[host]["removed_items"]["mac_address_table_removed"] = []
+            result[host]["removed_items"]["routing_table_removed"] = []
+            result[host]["removed_items"]["arp_table_removed"] = []
+            result[host]["item_changes"]["snapshot_missing"].append(
+                {
+                    "type": "missing snapshot",
+                    "item": host,
+                    "before": "present" if before is not None else "missing",
+                    "after": "present" if after is not None else "missing",
+                }
+            )
+            no_changes = False
             continue
 
         result[host] = {}
@@ -64,8 +86,10 @@ def compare_snapshots(devices, file1, file2):
         )
 
         if not diff:
-            console.print("[green]✅ No changes detected between snapshots.[/green]")
-            return
+            no_change_hosts.append(host)
+            continue
+
+        no_changes = False
 
         changed_values = diff.get("values_changed", {})
         added_items = diff.get("iterable_item_added", [])
@@ -224,6 +248,17 @@ def compare_snapshots(devices, file1, file2):
                         }
                     )
 
+    # Provide a placeholder when there are no diffs across all hosts.
+    if no_changes:
+        # Only print "no changes" when there are truly no diffs across all hosts.
+        console.print("[green]✅ No changes detected between snapshots.[/green]")
+        result["__no_changes__"] = {}
+    elif no_change_hosts:
+        # Avoid misleading logs; summarize hosts with no diffs.
+        console.print(
+            f"[yellow]⚠ No changes for hosts: {', '.join(no_change_hosts)}[/yellow]"
+        )
+
     return result
 
 
@@ -267,6 +302,24 @@ def save_to_excel(
 ):
     wb = Workbook()
     default_sheet = wb.active
+
+    # Write a placeholder sheet when there are no changes.
+    if "__no_changes__" in all_results:
+        ws = wb.create_sheet("no_changes")
+        ws.append(["Changes"])
+        current_row = ws.max_row
+        ws.merge_cells(
+            start_row=current_row, start_column=1, end_row=current_row, end_column=5
+        )
+        current_cell = ws.cell(row=current_row, column=1)
+        current_cell.alignment = Alignment(horizontal="center")
+        ws.append(["Category", "Type", "Item", "Before", "After"])
+        ws.append(["no changes", "", "", "", ""])
+        _autosize_columns(ws)
+        if default_sheet is not None and len(wb.worksheets) > 1:
+            wb.remove(default_sheet)
+        wb.save(filepath)
+        return
 
     for host, result in all_results.items():
         # result = all_results.get(host, {}) or {}
@@ -375,7 +428,7 @@ def save_to_excel(
 
 def compare(base_dir=None):
     customer_name = get_customer_name()
-    devices = load_devices()
+    devices = None  # Inventory not required for JSON-based compare.
     if base_dir:
         path = os.path.join(base_dir, customer_name, "legacy", "compare")
         snapshot_path = os.path.join(base_dir, customer_name, "legacy", "snapshot")
